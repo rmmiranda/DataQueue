@@ -1,0 +1,3 @@
+[submodule "segger-emfile"]
+	path = segger-emfile
+	url = https://ronald-swiftlabs@bitbucket.org/swiftlabsinc/segger-emfile.git
