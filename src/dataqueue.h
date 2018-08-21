@@ -21,8 +21,6 @@
 #ifndef __DATA_QUEUE_H__
 #define __DATA_QUEUE_H__
 
-#include <stdint.h>
-
 /**
  * Data queue status code used by
  * functions to return the status

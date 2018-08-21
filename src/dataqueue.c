@@ -16,77 +16,28 @@
 * 10-Aug-2018   RMM      Initial code  based on expected APIs.
 **********************************************************************/
 
-#include <stdlib.h>
-#include <string.h>
+#include "psl.h"
+#include "fsal.h"
 
 #include "dataqueue.h"
 
-/**
- * Platform specific macro definitons
- * TODO: should be defined on a separate
- *       header file located on a platform
- *       specific folder, which is located
- *       in the PSL folder
- */
-#define DATA_QUEUE_FILE_HANDLE_LIST_MAX			10
-#define DATA_QUEUE_FILE_HANDLE_INVALID			0
-
-/**
- * Filesystem abstraction layer (FSAL) macros
- * TODO: should be defined on a separate
- *       header file
- */
-#define FSAL_STATUS_OK				0
-#define FSAL_ERROR_DIR_ACCESS		1
-#define FSAL_ERROR_FILE_ACCESS		2
-
-#define FSAL_FLAGS_CREATE			0x00000001
-#define FSAL_FLAGS_READ_ONLY		0x00000010
-#define FSAL_FLAGS_WRITE_ONLY		0x00000020
-#define FSAL_FLAGS_READ_WRITE		0x00000040
-#define FSAL_FLAGS_BINARY			0x00000100
-
+#if 0
 /**
  * Filesystem abstraction layer (FSAL) data types
  * TODO: should be defined on a separate
  *       header file
  */
-typedef int FSAL_File_t;
-
-#ifdef FSAL_STUB
 
 int FSAL_MakeDirectory( char * dir_name ) { return FSAL_STATUS_OK; }
 int FSAL_ChangeDirectory( char * dir_name ) { return FSAL_STATUS_OK; }
 int FSAL_RemoveDirectory( char * dir_name ) { return FSAL_STATUS_OK; }
 int FSAL_ListDirectory( char * dir_name ) { return FSAL_STATUS_OK; }
 int FSAL_ListFile( char * file_name ) { return FSAL_STATUS_OK; }
-int FSAL_ListAll( void ) { return FSAL_STATUS_OK; }
 int FSAL_OpenFile( char * file_name, int flags, FSAL_File_t * fsal_handle ) { return FSAL_STATUS_OK; }
 int FSAL_CloseFile( FSAL_File_t fsal_handle ) { return FSAL_STATUS_OK; }
 size_t FSAL_ReadFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length ) { return FSAL_STATUS_OK; }
 size_t FSAL_WriteFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length ) { return FSAL_STATUS_OK; }
 int FSAL_DeleteFile( char * file_name ) { return FSAL_STATUS_OK; }
-int main(void) { return 0; }
-
-#else
-
-/**
- * Filesystem abstraction layer (FSAL) API's
- * TODO: should be defined on a separate
- *       header file
- */
-extern int FSAL_MakeDirectory( char * dir_name );
-extern int FSAL_ChangeDirectory( char * dir_name );
-extern int FSAL_RemoveDirectory( char * dir_name );
-extern int FSAL_ListDirectory( char * dir_name );
-extern int FSAL_ListFile( char * file_name );
-extern int FSAL_ListAll( void );
-extern int FSAL_OpenFile( char * file_name, int flags, FSAL_File_t * fsal_handle );
-extern int FSAL_CloseFile( FSAL_File_t fsal_handle );
-extern size_t FSAL_ReadFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length );
-extern size_t FSAL_WriteFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length );
-extern int FSAL_DeleteFile( char * file_name );
-
 #endif
 
 /**
@@ -190,7 +141,7 @@ int DataQ_FifoCreate( char * fifo_name, uint8_t max_entries, size_t max_entry_si
 	if ( FSAL_OpenFile(".lut", fsal_flags, &fsal_handle) == FSAL_STATUS_OK ) {
 
 		/* invalidate a generic LUT entry */
-		memset( &fifo_lut_entry, 0, sizeof(DataQ_LUT_Entry_t) );
+		PSL_memset( &fifo_lut_entry, 0, sizeof(DataQ_LUT_Entry_t) );
 
 		/* pre-populate the lut with max number of entries */
 		for ( index = 0; index < max_entries; index++ ) {
@@ -395,7 +346,7 @@ int DataQ_FifoOpen( char * fifo_name, int access, int mode, DataQ_File_t ** fifo
 				 (mode == DataQ_FileHandleList[index].mode) ) {
 
 				/* fifo is already opened with the correct access parameters */
-				memcpy( *fifo_handle, &DataQ_FileHandleList[index], sizeof(DataQ_File_t) );
+				PSL_memcpy( *fifo_handle, &DataQ_FileHandleList[index], sizeof(DataQ_File_t) );
 				return CODE_STATUS_OK;
 			}
 
@@ -746,7 +697,7 @@ int DataQ_FifoEnqueue( DataQ_File_t * fifo_handle, void * data, size_t size )
 		 (fifo_hdr.head_lut_offs == fifo_hdr.tail_lut_offs)  ) {
 
 		/* add the new entry by copying the LUT entry indicated either by the head or tail offset */
-		memcpy( fifo_lut_cache + (fifo_hdr.tail_lut_offs * sizeof(DataQ_LUT_Entry_t)), &fifo_lut_entry, sizeof(DataQ_LUT_Entry_t) );
+		PSL_memcpy( fifo_lut_cache + (fifo_hdr.tail_lut_offs * sizeof(DataQ_LUT_Entry_t)), &fifo_lut_entry, sizeof(DataQ_LUT_Entry_t) );
 
 		/* increment entry counter */
 		fifo_hdr.num_of_entries++;
@@ -766,7 +717,7 @@ int DataQ_FifoEnqueue( DataQ_File_t * fifo_handle, void * data, size_t size )
 		 * head offset and then incrementing the head offset (wrapping around if
 		 * the head reach the end of the queue)
 		 */
-		memset( fifo_lut_cache + (fifo_hdr.head_lut_offs * sizeof(DataQ_LUT_Entry_t)), 0, sizeof(DataQ_LUT_Entry_t) );
+		PSL_memset( fifo_lut_cache + (fifo_hdr.head_lut_offs * sizeof(DataQ_LUT_Entry_t)), 0, sizeof(DataQ_LUT_Entry_t) );
 		fifo_hdr.head_lut_offs = (fifo_hdr.head_lut_offs + 1) % fifo_hdr.max_entries;
 
 		/* add the new entry by incrementing the tail offset (wrapping around if the
@@ -774,7 +725,7 @@ int DataQ_FifoEnqueue( DataQ_File_t * fifo_handle, void * data, size_t size )
 		 * the new tail offset
 		 */
 		fifo_hdr.tail_lut_offs = (fifo_hdr.tail_lut_offs + 1) % fifo_hdr.max_entries;
-		memcpy( fifo_lut_cache + (fifo_hdr.tail_lut_offs * sizeof(DataQ_LUT_Entry_t)), &fifo_lut_entry, sizeof(DataQ_LUT_Entry_t) );
+		PSL_memcpy( fifo_lut_cache + (fifo_hdr.tail_lut_offs * sizeof(DataQ_LUT_Entry_t)), &fifo_lut_entry, sizeof(DataQ_LUT_Entry_t) );
 
 	} else {
 
@@ -783,7 +734,7 @@ int DataQ_FifoEnqueue( DataQ_File_t * fifo_handle, void * data, size_t size )
 		 * the new tail offset
 		 */
 		fifo_hdr.tail_lut_offs = (fifo_hdr.tail_lut_offs + 1) % fifo_hdr.max_entries;
-		memcpy( fifo_lut_cache + (fifo_hdr.tail_lut_offs * sizeof(DataQ_LUT_Entry_t)), &fifo_lut_entry, sizeof(DataQ_LUT_Entry_t) );
+		PSL_memcpy( fifo_lut_cache + (fifo_hdr.tail_lut_offs * sizeof(DataQ_LUT_Entry_t)), &fifo_lut_entry, sizeof(DataQ_LUT_Entry_t) );
 
 		/* increment entry counter */
 		fifo_hdr.num_of_entries++;
@@ -943,7 +894,7 @@ int DataQ_FifoDequeue( DataQ_File_t * fifo_handle, void * data, size_t * size )
 		 * head offset and then incrementing the head offset (wrapping around if
 		 * the head reach the end of the queue)
 		 */
-		memset( fifo_lut_cache + (fifo_hdr.head_lut_offs * sizeof(DataQ_LUT_Entry_t)), 0, sizeof(DataQ_LUT_Entry_t) );
+		PSL_memset( fifo_lut_cache + (fifo_hdr.head_lut_offs * sizeof(DataQ_LUT_Entry_t)), 0, sizeof(DataQ_LUT_Entry_t) );
 		fifo_hdr.head_lut_offs = (fifo_hdr.head_lut_offs + 1) % fifo_hdr.max_entries;
 
 		/* decrement entry counter */
@@ -1251,9 +1202,9 @@ int DataQ_FifoGetEntry( DataQ_File_t * fifo_handle, void * data, size_t * size )
 	}
 
 	/* retrieve the entry by copying the LUT entry indicated by the seek offset */
-	memcpy( &fifo_lut_entry,
-			fifo_lut_cache + (fifo_hdr.seek_lut_offs * sizeof(DataQ_LUT_Entry_t)),
-			sizeof(DataQ_LUT_Entry_t) );
+	PSL_memcpy( &fifo_lut_entry,
+			    fifo_lut_cache + (fifo_hdr.seek_lut_offs * sizeof(DataQ_LUT_Entry_t)),
+			    sizeof(DataQ_LUT_Entry_t) );
 
 
 	/* extract the data from the LUT entry as indicated by the reference */

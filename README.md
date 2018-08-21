@@ -1,6 +1,7 @@
 # DataQueue
 
-The repository for the database model used in implementing the message log of TR's M7 product. This repo will bring the Segger emFile submodule for the the `segger-emfile` git repo. 
+The repository for the database model used in implementing the message log of TR's M7 product. 
+ 
 The DataQueue version will be controlled from this repo. View this README online at https://bitbucket.org/swiftlabsinc/data-queue/src/master/README.md
 
 ## Checkout
@@ -8,12 +9,27 @@ The DataQueue version will be controlled from this repo. View this README online
 ```
 git clone https://<user>@bitbucket.org/swiftlabsinc/data-queue.git DataQueue
 cd DataQueue
-git submodule update --init --recursive
 ```
 
 ## Development Environment
 
-*To be filled in by developers*
+### File Structure
+
+#### src
+
+The platform software (or OS) independent and hardware independent source code.
+
+#### inc
+
+The header files required by the source code and exported to the platform specific source code.
+
+#### psl
+
+The Platform Software Layer (PSL) which contains source code specific to the platform software.
+
+#### fsal
+
+The Filesystem Abstraction Layer (FSAL) which contins source code specific to the file system.
 
 ## Build
 
