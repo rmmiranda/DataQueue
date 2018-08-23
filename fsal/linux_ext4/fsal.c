@@ -102,10 +102,32 @@ int FSAL_ChangeDirectory( char * dir_name )
  */
 int FSAL_RemoveDirectory( char * dir_name )
 {
+	char file_name[32] = {0};
+	struct dirent * de;
+	DIR * dr;
+
 	/* sanity checks */
 	if ( dir_name == NULL ) {
 		return FSAL_ERROR_DIR_ACCESS;
 	}
+
+	/* open the specified directory */
+	dr = opendir( dir_name );
+	if ( dr == NULL ) {
+		return FSAL_ERROR_DIR_ACCESS;
+	}
+
+	/* list all files in the directory */
+	de = readdir( dr );
+	while ( de != NULL ) {
+		if ((strcmp(de->d_name, ".") != 0) && (strcmp(de->d_name, "..") != 0)) {
+			sprintf(file_name, "%s/%s", dir_name, de->d_name);
+			unlink(file_name);
+		}
+		de = readdir( dr );
+	}
+
+	closedir( dr );
 
 	/* delete the specified directory */
 	if ( rmdir(dir_name) == -1 ) {
@@ -211,14 +233,25 @@ int FSAL_ListFile( char * file_name )
 int FSAL_OpenFile( char * file_name, int flags, FSAL_File_t * fsal_handle )
 {
 	int fd;
+	int open_flags = 0;
 
 	/* sanity checks */
 	if ( file_name == NULL ) {
 		return FSAL_ERROR_FILE_ACCESS;
 	}
 
+	if (flags & FSAL_FLAGS_CREATE )
+		open_flags |= O_CREAT;
+
+	if (flags & FSAL_FLAGS_READ_ONLY )
+		open_flags |= O_RDONLY;
+	else if (flags & FSAL_FLAGS_WRITE_ONLY )
+		open_flags |= O_WRONLY;
+	else
+		open_flags |= O_RDWR;
+
 	/* open the specified file */
-	fd = open( file_name, flags, 0 );
+	fd = open( file_name, open_flags, 0777 );
 	if ( fd == -1 ) {
 		return FSAL_ERROR_FILE_ACCESS;
 	}

@@ -21,25 +21,6 @@
 
 #include "dataqueue.h"
 
-#if 0
-/**
- * Filesystem abstraction layer (FSAL) data types
- * TODO: should be defined on a separate
- *       header file
- */
-
-int FSAL_MakeDirectory( char * dir_name ) { return FSAL_STATUS_OK; }
-int FSAL_ChangeDirectory( char * dir_name ) { return FSAL_STATUS_OK; }
-int FSAL_RemoveDirectory( char * dir_name ) { return FSAL_STATUS_OK; }
-int FSAL_ListDirectory( char * dir_name ) { return FSAL_STATUS_OK; }
-int FSAL_ListFile( char * file_name ) { return FSAL_STATUS_OK; }
-int FSAL_OpenFile( char * file_name, int flags, FSAL_File_t * fsal_handle ) { return FSAL_STATUS_OK; }
-int FSAL_CloseFile( FSAL_File_t fsal_handle ) { return FSAL_STATUS_OK; }
-size_t FSAL_ReadFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length ) { return FSAL_STATUS_OK; }
-size_t FSAL_WriteFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length ) { return FSAL_STATUS_OK; }
-int FSAL_DeleteFile( char * file_name ) { return FSAL_STATUS_OK; }
-#endif
-
 /**
  * List of currently opened data queues
  */
@@ -78,7 +59,6 @@ static DataQ_File_t DataQ_FileHandleList[ DATA_QUEUE_FILE_HANDLE_LIST_MAX ] = { 
  */
 int DataQ_FifoCreate( char * fifo_name, uint8_t max_entries, size_t max_entry_size, uint16_t flags )
 {
-	DataQ_File_t * fifo_handle;
 	DataQ_Hdr_t fifo_hdr = {
 		.size = 0,
 		.max_entry_size = max_entry_size,
@@ -106,14 +86,10 @@ int DataQ_FifoCreate( char * fifo_name, uint8_t max_entries, size_t max_entry_si
 	}
 
 	/* check if data queue already exists */
-	if ( DataQ_FifoOpen(
-			fifo_name,
-			ACCESS_TYPE_READ_ONLY,
-			ACCESS_MODE_UNPACKED,
-			&fifo_handle) == CODE_STATUS_OK ) {
+	if ( FSAL_ChangeDirectory(fifo_name) == FSAL_STATUS_OK ) {
 
-		/* data queue exists so close it and return */
-		DataQ_FifoClose( fifo_handle );
+		/* data queue exists so return back and exit */
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_QUEUE_EXISTS;
 	}
 
@@ -127,7 +103,7 @@ int DataQ_FifoCreate( char * fifo_name, uint8_t max_entries, size_t max_entry_si
 
 	/* create the header (or metadata) file associated with the fifo */
 	if ( (FSAL_OpenFile(".header", fsal_flags, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
-		 (FSAL_WriteFile(fsal_handle, (uint8_t *)&fifo_hdr, sizeof(fifo_hdr)) == FSAL_ERROR_FILE_ACCESS) ||
+		 (FSAL_WriteFile(fsal_handle, (uint8_t *)&fifo_hdr, sizeof(fifo_hdr)) < 0) ||
 		 (FSAL_CloseFile(fsal_handle) == FSAL_ERROR_FILE_ACCESS) ) {
 
 		/* delete the previously created directory */
@@ -151,7 +127,7 @@ int DataQ_FifoCreate( char * fifo_name, uint8_t max_entries, size_t max_entry_si
 			if ( FSAL_WriteFile(
 					fsal_handle,
 					(uint8_t *)&fifo_lut_entry,
-					sizeof(DataQ_LUT_Entry_t)) == FSAL_ERROR_FILE_ACCESS ) {
+					sizeof(DataQ_LUT_Entry_t)) < 0 ) {
 
 				/* at least one write operation failed */
 				FSAL_CloseFile( fsal_handle );
@@ -167,6 +143,7 @@ int DataQ_FifoCreate( char * fifo_name, uint8_t max_entries, size_t max_entry_si
 
 		/* lut file fully initialized */
 		FSAL_CloseFile( fsal_handle );
+		FSAL_ChangeDirectory( "../" );
 
 		/* operation succeeded */
 		return CODE_STATUS_OK;
@@ -223,6 +200,7 @@ int DataQ_FifoDestroy( char * fifo_name )
 			(strcmp(fifo_name, DataQ_FileHandleList[index].name) == 0) ) {
 
 			/* fifo is still opened and maybe busy */
+			FSAL_ChangeDirectory( "../" );
 			return CODE_ERROR_QUEUE_IS_BUSY;
 		}
 	}
@@ -233,6 +211,7 @@ int DataQ_FifoDestroy( char * fifo_name )
 		 (FSAL_ListFile( ".rwlock" ) == FSAL_STATUS_OK) ) {
 
 		/* fifo is still opened by another and maybe busy */
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_QUEUE_IS_BUSY;
 
 	}
@@ -317,7 +296,7 @@ int DataQ_FifoOpen( char * fifo_name, int access, int mode, DataQ_File_t ** fifo
 	FSAL_File_t fsal_handle = -1;
 	int fsal_flags = FSAL_FLAGS_BINARY | FSAL_FLAGS_READ_WRITE;
 	int fsal_status = FSAL_ERROR_FILE_ACCESS;
-	uint8_t users;
+	uint8_t users = 1;
 	int index;
 
 	/* check mandatory arguments for NULL pointers */
@@ -348,10 +327,12 @@ int DataQ_FifoOpen( char * fifo_name, int access, int mode, DataQ_File_t ** fifo
 
 				/* fifo is already opened with the correct access parameters */
 				PSL_memcpy( *fifo_handle, &DataQ_FileHandleList[index], sizeof(DataQ_File_t) );
+				 FSAL_ChangeDirectory( "../" );
 				return CODE_STATUS_OK;
 			}
 
 			/* fifo is already opened but with different access parameters */
+			FSAL_ChangeDirectory( "../" );
 			return CODE_ERROR_QUEUE_OPENED;
 		}
 	}
@@ -361,6 +342,7 @@ int DataQ_FifoOpen( char * fifo_name, int access, int mode, DataQ_File_t ** fifo
 		 (FSAL_ListFile( ".rwlock" ) == FSAL_STATUS_OK) ) {
 
 		/* fifo is already opened by another process with at least write access */
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_QUEUE_IS_BUSY;
 
 	} else if ( (FSAL_ListFile( ".rolock" ) == FSAL_STATUS_OK) &&
@@ -370,6 +352,7 @@ int DataQ_FifoOpen( char * fifo_name, int access, int mode, DataQ_File_t ** fifo
 		 *  fifo is already opened by another process with read-only
 		 * access but write access is required
 		 */
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_QUEUE_IS_BUSY;
 
 	}
@@ -384,7 +367,8 @@ int DataQ_FifoOpen( char * fifo_name, int access, int mode, DataQ_File_t ** fifo
 			if ( FSAL_OpenFile(".rolock", fsal_flags | FSAL_FLAGS_CREATE, &fsal_handle) == FSAL_STATUS_OK ) {
 
 				/* initialize lock file with default user count (set to 1) */
-				fsal_status = FSAL_WriteFile( fsal_handle, (uint8_t *)&users, sizeof(users) );
+				if ( FSAL_WriteFile(fsal_handle, (uint8_t *)&users, sizeof(users)) == sizeof(users) )
+					fsal_status = FSAL_STATUS_OK;
 
 				/* done creating the lock file */
 				FSAL_CloseFile( fsal_handle );
@@ -396,13 +380,14 @@ int DataQ_FifoOpen( char * fifo_name, int access, int mode, DataQ_File_t ** fifo
 			if ( FSAL_OpenFile(".rolock", fsal_flags, &fsal_handle) == FSAL_STATUS_OK ) {
 
 				/* read the current number of users from the lock file */
-				if ( FSAL_ReadFile(fsal_handle, (uint8_t *)&users, sizeof(users)) == FSAL_STATUS_OK ) {
+				if ( FSAL_ReadFile(fsal_handle, (uint8_t *)&users, sizeof(users)) == sizeof(users) ) {
 
 					/* increment the number of users */
 					users++;
 
 					/* write the updated current number of users to the lock file */
-					fsal_status = FSAL_WriteFile( fsal_handle, (uint8_t *)&users, sizeof(users) );
+					if ( FSAL_WriteFile(fsal_handle, (uint8_t *)&users, sizeof(users)) == sizeof(users) )
+						fsal_status = FSAL_STATUS_OK;
 				}
 
 				/* done modifying the lock file */
@@ -430,6 +415,7 @@ int DataQ_FifoOpen( char * fifo_name, int access, int mode, DataQ_File_t ** fifo
 
 	/* check if appropriate lock file is added */
 	if ( fsal_status != FSAL_STATUS_OK ) {
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_FS_ACCESS_FAIL;
 	}
 
@@ -443,16 +429,21 @@ int DataQ_FifoOpen( char * fifo_name, int access, int mode, DataQ_File_t ** fifo
 			DataQ_FileHandleList[index].handle = index;
 			DataQ_FileHandleList[index].access = access;
 			DataQ_FileHandleList[index].mode = mode;
+			strncpy( DataQ_FileHandleList[index].name,
+					fifo_name,
+					sizeof(DataQ_FileHandleList[index].name) );
 
 			/* store the fifo handle pointer to the output parameter */
 			*fifo_handle = &DataQ_FileHandleList[index];
 
 			/* operation succeeded */
+			FSAL_ChangeDirectory( "../" );
 			return CODE_STATUS_OK;
 		}
 	}
 
 	/* no more available handles */
+	FSAL_ChangeDirectory( "../" );
 	return CODE_ERROR_HANDLE_NOT_AVAIL;
 }
 
@@ -516,13 +507,14 @@ int DataQ_FifoClose( DataQ_File_t * fifo_handle )
 			if ( FSAL_OpenFile(".rolock", fsal_flags, &fsal_handle) == FSAL_STATUS_OK ) {
 
 				/* read the current number of users from the lock file */
-				if ( FSAL_ReadFile(fsal_handle, (uint8_t *)&users, sizeof(users)) == FSAL_STATUS_OK ) {
+				if ( FSAL_ReadFile(fsal_handle, (uint8_t *)&users, sizeof(users)) == sizeof(users) ) {
 
 					/* decrement the number of users */
 					users--;
 
 					/* write the updated current number of users to the lock file */
-					fsal_status = FSAL_WriteFile( fsal_handle, (uint8_t *)&users, sizeof(users) );
+					if ( FSAL_WriteFile(fsal_handle, (uint8_t *)&users, sizeof(users)) == sizeof(users) )
+						fsal_status = FSAL_STATUS_OK;
 				}
 
 				/* done modifying the lock file */
@@ -557,6 +549,8 @@ int DataQ_FifoClose( DataQ_File_t * fifo_handle )
 			break;
 		}
 	}
+
+	FSAL_ChangeDirectory( "../" );
 
 	/* check if appropriate lock file is updated and/or deleted */
 	if ( fsal_status != FSAL_STATUS_OK ) {
@@ -652,28 +646,31 @@ int DataQ_FifoEnqueue( DataQ_File_t * fifo_handle, void * data, size_t size )
 	/* check if fifo is already opened for writing */
 	if ( (FSAL_ListFile( ".wolock" ) == FSAL_ERROR_FILE_ACCESS) &&
 		 (FSAL_ListFile( ".rwlock" ) == FSAL_ERROR_FILE_ACCESS) ) {
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_QUEUE_CLOSED;
 	}
 
 	/* open and read the header (or metadata) file associated with the fifo */
 	if ( (FSAL_OpenFile(".header", FSAL_FLAGS_BINARY | FSAL_FLAGS_READ_ONLY, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
-		 (FSAL_ReadFile(fsal_handle, (uint8_t *)&fifo_hdr, sizeof(fifo_hdr)) == FSAL_ERROR_FILE_ACCESS) ||
+		 (FSAL_ReadFile(fsal_handle, (uint8_t *)&fifo_hdr, sizeof(fifo_hdr)) < 0) ||
 		 (FSAL_CloseFile(fsal_handle) == FSAL_ERROR_FILE_ACCESS) ) {
 
 		/* file system access error */
 		if ( fsal_handle != -1 )
 			FSAL_CloseFile( fsal_handle );
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_FS_ACCESS_FAIL;
 	}
 
 	/* create a cache which directly mirrors the LUT file associated with the fifo */
 	if ( (FSAL_OpenFile(".lut", FSAL_FLAGS_BINARY | FSAL_FLAGS_READ_ONLY, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
-		 (FSAL_ReadFile(fsal_handle, (uint8_t *)fifo_lut_cache, DATAQ_LUT_FILE_SIZE_MAX) == FSAL_ERROR_FILE_ACCESS) ||
+		 (FSAL_ReadFile(fsal_handle, (uint8_t *)fifo_lut_cache, DATAQ_LUT_FILE_SIZE_MAX) < 0) ||
 		 (FSAL_CloseFile(fsal_handle) == FSAL_ERROR_FILE_ACCESS) ) {
 
 		/* file system access error */
 		if ( fsal_handle != -1 )
 			FSAL_CloseFile( fsal_handle );
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_FS_ACCESS_FAIL;
 	}
 
@@ -681,22 +678,23 @@ int DataQ_FifoEnqueue( DataQ_File_t * fifo_handle, void * data, size_t size )
 	fifo_hdr.reference_count++;
 
 	/* initialize the LUT entry by converting reference count  as a revolving reference string */
-	for ( int base10 = 1, index = 0; index < (sizeof(fifo_lut_entry.reference) - 1); base10 *= 10, index++ ) {
-		fifo_lut_entry.reference[ index ] = '0' + ((fifo_hdr.reference_count % (base10 * 10)) / base10);
+	for ( int base10 = 1, index = 0; index < sizeof(fifo_lut_entry.reference); base10 *= 10, index++ ) {
+		fifo_lut_entry.reference[ DATA_QUEUE_LUT_ENTRY_SIZE - index - 1] = '0' + ((fifo_hdr.reference_count % (base10 * 10)) / base10);
 	}
 
 	/* copy the LUT entry reference array and terminate to make it a string */
 	PSL_memcpy( fifo_lut_entry_reference, fifo_lut_entry.reference, DATA_QUEUE_LUT_ENTRY_SIZE);
-	fifo_lut_entry_reference[DATA_QUEUE_LUT_ENTRY_SIZE + 1] = '\0';
+	fifo_lut_entry_reference[DATA_QUEUE_LUT_ENTRY_SIZE] = '\0';
 
 	/* create a new file to contain the enqueued data */
 	if ( (FSAL_OpenFile(fifo_lut_entry_reference, FSAL_FLAGS_BINARY | FSAL_FLAGS_WRITE_ONLY | FSAL_FLAGS_CREATE, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
-		 (FSAL_WriteFile(fsal_handle, (uint8_t *)data, size) == FSAL_ERROR_FILE_ACCESS) ||
+		 (FSAL_WriteFile(fsal_handle, (uint8_t *)data, size) < 0) ||
 		 (FSAL_CloseFile(fsal_handle) == FSAL_ERROR_FILE_ACCESS) ) {
 
 		/* file system access error */
 		if ( fsal_handle != -1 )
 			FSAL_CloseFile( fsal_handle );
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_FS_ACCESS_FAIL;
 	}
 
@@ -750,27 +748,30 @@ int DataQ_FifoEnqueue( DataQ_File_t * fifo_handle, void * data, size_t size )
 
 	/* update the LUT file associated with the fifo */
 	if ( (FSAL_OpenFile(".lut", FSAL_FLAGS_BINARY | FSAL_FLAGS_WRITE_ONLY, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
-		 (FSAL_WriteFile(fsal_handle, (uint8_t *)fifo_lut_cache, DATAQ_LUT_FILE_SIZE_MAX) == FSAL_ERROR_FILE_ACCESS) ||
+		 (FSAL_WriteFile(fsal_handle, (uint8_t *)fifo_lut_cache, DATAQ_LUT_FILE_SIZE_MAX) < 0) ||
 		 (FSAL_CloseFile(fsal_handle) == FSAL_ERROR_FILE_ACCESS) ) {
 
 		/* file system access error */
 		if ( fsal_handle != -1 )
 			FSAL_CloseFile( fsal_handle );
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_FS_ACCESS_FAIL;
 	}
 
 	/* update the header (or metadata) file associated with the fifo */
 	if ( (FSAL_OpenFile(".header", FSAL_FLAGS_BINARY | FSAL_FLAGS_WRITE_ONLY, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
-		 (FSAL_WriteFile(fsal_handle, (uint8_t *)&fifo_hdr, sizeof(fifo_hdr)) == FSAL_ERROR_FILE_ACCESS) ||
+		 (FSAL_WriteFile(fsal_handle, (uint8_t *)&fifo_hdr, sizeof(fifo_hdr)) < 0) ||
 		 (FSAL_CloseFile(fsal_handle) == FSAL_ERROR_FILE_ACCESS) ) {
 
 		/* file system access error */
 		if ( fsal_handle != -1 )
 			FSAL_CloseFile( fsal_handle );
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_FS_ACCESS_FAIL;
 	}
 
 	/* operation succeeded */
+	FSAL_ChangeDirectory( "../" );
 	return CODE_STATUS_OK;
 }
 
@@ -816,6 +817,7 @@ int DataQ_FifoDequeue( DataQ_File_t * fifo_handle, void * data, size_t * size )
 	FSAL_File_t fsal_handle = -1;
 	DataQ_Hdr_t fifo_hdr;
 	uint8_t fifo_lut_cache[ DATAQ_LUT_FILE_SIZE_MAX ] = { 0 };
+	char fifo_lut_entry_reference[DATA_QUEUE_LUT_ENTRY_SIZE + 1];
 	int index;
 
 	/* check mandatory arguments for NULL pointers */
@@ -858,28 +860,31 @@ int DataQ_FifoDequeue( DataQ_File_t * fifo_handle, void * data, size_t * size )
 	/* check if fifo is already opened for writing */
 	if ( (FSAL_ListFile( ".wolock" ) == FSAL_ERROR_FILE_ACCESS) &&
 		 (FSAL_ListFile( ".rwlock" ) == FSAL_ERROR_FILE_ACCESS) ) {
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_QUEUE_CLOSED;
 	}
 
 	/* open and read the header (or metadata) file associated with the fifo */
 	if ( (FSAL_OpenFile(".header", FSAL_FLAGS_BINARY | FSAL_FLAGS_READ_ONLY, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
-		 (FSAL_ReadFile(fsal_handle, (uint8_t *)&fifo_hdr, sizeof(fifo_hdr)) == FSAL_ERROR_FILE_ACCESS) ||
+		 (FSAL_ReadFile(fsal_handle, (uint8_t *)&fifo_hdr, sizeof(fifo_hdr)) < 0) ||
 		 (FSAL_CloseFile(fsal_handle) == FSAL_ERROR_FILE_ACCESS) ) {
 
 		/* file system access error */
 		if ( fsal_handle != -1 )
 			FSAL_CloseFile( fsal_handle );
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_FS_ACCESS_FAIL;
 	}
 
 	/* create a cache which directly mirrors the LUT file associated with the fifo */
 	if ( (FSAL_OpenFile(".lut", FSAL_FLAGS_BINARY | FSAL_FLAGS_READ_ONLY, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
-		 (FSAL_ReadFile(fsal_handle, (uint8_t *)fifo_lut_cache, DATAQ_LUT_FILE_SIZE_MAX) == FSAL_ERROR_FILE_ACCESS) ||
+		 (FSAL_ReadFile(fsal_handle, (uint8_t *)fifo_lut_cache, DATAQ_LUT_FILE_SIZE_MAX) < 0) ||
 		 (FSAL_CloseFile(fsal_handle) == FSAL_ERROR_FILE_ACCESS) ) {
 
 		/* file system access error */
 		if ( fsal_handle != -1 )
 			FSAL_CloseFile( fsal_handle );
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_FS_ACCESS_FAIL;
 	}
 
@@ -888,6 +893,7 @@ int DataQ_FifoDequeue( DataQ_File_t * fifo_handle, void * data, size_t * size )
 		 (fifo_hdr.head_lut_offs == fifo_hdr.tail_lut_offs)  ) {
 
 		/* nothing to return */
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_QUEUE_IS_EMPTY;
 
 	} else {
@@ -897,6 +903,25 @@ int DataQ_FifoDequeue( DataQ_File_t * fifo_handle, void * data, size_t * size )
 		if ( fifo_hdr.seek_lut_offs == fifo_hdr.head_lut_offs ) {
 			fifo_hdr.seek_lut_offs = (fifo_hdr.seek_lut_offs + 1) % fifo_hdr.max_entries;
 		}
+
+		/* copy the LUT entry reference array and terminate to make it a string */
+		PSL_memcpy( fifo_lut_entry_reference, fifo_lut_cache + (fifo_hdr.head_lut_offs * sizeof(DataQ_LUT_Entry_t)), DATA_QUEUE_LUT_ENTRY_SIZE);
+		fifo_lut_entry_reference[DATA_QUEUE_LUT_ENTRY_SIZE] = '\0';
+
+		/* copy the dequeued data and store it if possible */
+		if ( (FSAL_OpenFile(fifo_lut_entry_reference, FSAL_FLAGS_BINARY | FSAL_FLAGS_READ_ONLY, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
+			 (*size = FSAL_ReadFile(fsal_handle, (uint8_t *)data, *size) < 0) ||
+			 (FSAL_CloseFile(fsal_handle) == FSAL_ERROR_FILE_ACCESS) ) {
+
+			/* file system access error */
+			if ( fsal_handle != -1 )
+				FSAL_CloseFile( fsal_handle );
+			FSAL_ChangeDirectory( "../" );
+			return CODE_ERROR_FS_ACCESS_FAIL;
+		}
+
+		/* delete the file */
+		FSAL_DeleteFile( fifo_lut_entry_reference );
 
 		/* remove the oldest entry by invalidating the LUT entry indicated by the
 		 * head offset and then incrementing the head offset (wrapping around if
@@ -911,27 +936,30 @@ int DataQ_FifoDequeue( DataQ_File_t * fifo_handle, void * data, size_t * size )
 
 	/* update the LUT file associated with the fifo */
 	if ( (FSAL_OpenFile(".lut", FSAL_FLAGS_BINARY | FSAL_FLAGS_WRITE_ONLY, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
-		 (FSAL_WriteFile(fsal_handle, (uint8_t *)fifo_lut_cache, DATAQ_LUT_FILE_SIZE_MAX) == FSAL_ERROR_FILE_ACCESS) ||
+		 (FSAL_WriteFile(fsal_handle, (uint8_t *)fifo_lut_cache, DATAQ_LUT_FILE_SIZE_MAX) < 0) ||
 		 (FSAL_CloseFile(fsal_handle) == FSAL_ERROR_FILE_ACCESS) ) {
 
 		/* file system access error */
 		if ( fsal_handle != -1 )
 			FSAL_CloseFile( fsal_handle );
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_FS_ACCESS_FAIL;
 	}
 
 	/* update the header (or metadata) file associated with the fifo */
 	if ( (FSAL_OpenFile(".header", FSAL_FLAGS_BINARY | FSAL_FLAGS_WRITE_ONLY, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
-		 (FSAL_WriteFile(fsal_handle, (uint8_t *)&fifo_hdr, sizeof(fifo_hdr)) == FSAL_ERROR_FILE_ACCESS) ||
+		 (FSAL_WriteFile(fsal_handle, (uint8_t *)&fifo_hdr, sizeof(fifo_hdr)) < 0) ||
 		 (FSAL_CloseFile(fsal_handle) == FSAL_ERROR_FILE_ACCESS) ) {
 
 		/* file system access error */
 		if ( fsal_handle != -1 )
 			FSAL_CloseFile( fsal_handle );
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_FS_ACCESS_FAIL;
 	}
 
 	/* operation succeeded */
+	FSAL_ChangeDirectory( "../" );
 	return CODE_STATUS_OK;
 }
 
@@ -1026,22 +1054,25 @@ int DataQ_FifoSeek( DataQ_File_t * fifo_handle, int seek_type, int position )
 	/* check if fifo is already opened for reading */
 	if ( (FSAL_ListFile( ".rolock" ) == FSAL_ERROR_FILE_ACCESS) &&
 		 (FSAL_ListFile( ".rwlock" ) == FSAL_ERROR_FILE_ACCESS) ) {
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_QUEUE_CLOSED;
 	}
 
 	/* open and read the header (or metadata) file associated with the fifo */
 	if ( (FSAL_OpenFile(".header", FSAL_FLAGS_BINARY | FSAL_FLAGS_READ_ONLY, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
-		 (FSAL_ReadFile(fsal_handle, (uint8_t *)&fifo_hdr, sizeof(fifo_hdr)) == FSAL_ERROR_FILE_ACCESS) ||
+		 (FSAL_ReadFile(fsal_handle, (uint8_t *)&fifo_hdr, sizeof(fifo_hdr)) < 0) ||
 		 (FSAL_CloseFile(fsal_handle) == FSAL_ERROR_FILE_ACCESS) ) {
 
 		/* file system access error */
 		if ( fsal_handle != -1 )
 			FSAL_CloseFile( fsal_handle );
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_FS_ACCESS_FAIL;
 	}
 
 	/* determine if fifo is seekable */
 	if ( (fifo_hdr.flags & FLAGS_RANDOM_ACCESS) == 0 ) {
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_QUEUE_NOT_SEEKABLE;
 	}
 
@@ -1050,12 +1081,14 @@ int DataQ_FifoSeek( DataQ_File_t * fifo_handle, int seek_type, int position )
 		 (fifo_hdr.head_lut_offs == fifo_hdr.tail_lut_offs)  ) {
 
 		/* nothing to return */
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_QUEUE_IS_EMPTY;
 
 	}
 
 	/* determine if seek position is outside the range */
 	if ( position >= fifo_hdr.num_of_entries ) {
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_INVALID_SEEK;
 	}
 
@@ -1080,16 +1113,18 @@ int DataQ_FifoSeek( DataQ_File_t * fifo_handle, int seek_type, int position )
 
 	/* update the header (or metadata) file associated with the fifo */
 	if ( (FSAL_OpenFile(".header", FSAL_FLAGS_BINARY | FSAL_FLAGS_WRITE_ONLY, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
-		 (FSAL_WriteFile(fsal_handle, (uint8_t *)&fifo_hdr, sizeof(fifo_hdr)) == FSAL_ERROR_FILE_ACCESS) ||
+		 (FSAL_WriteFile(fsal_handle, (uint8_t *)&fifo_hdr, sizeof(fifo_hdr)) < 0) ||
 		 (FSAL_CloseFile(fsal_handle) == FSAL_ERROR_FILE_ACCESS) ) {
 
 		/* file system access error */
 		if ( fsal_handle != -1 )
 			FSAL_CloseFile( fsal_handle );
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_FS_ACCESS_FAIL;
 	}
 
 	/* operation succeeded */
+	FSAL_ChangeDirectory( "../" );
 	return CODE_STATUS_OK;
 }
 
@@ -1176,28 +1211,31 @@ int DataQ_FifoGetEntry( DataQ_File_t * fifo_handle, void * data, size_t * size )
 	/* check if fifo is already opened for reading */
 	if ( (FSAL_ListFile( ".rolock" ) == FSAL_ERROR_FILE_ACCESS) &&
 		 (FSAL_ListFile( ".rwlock" ) == FSAL_ERROR_FILE_ACCESS) ) {
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_QUEUE_CLOSED;
 	}
 
 	/* open and read the header (or metadata) file associated with the fifo */
 	if ( (FSAL_OpenFile(".header", FSAL_FLAGS_BINARY | FSAL_FLAGS_READ_ONLY, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
-		 (FSAL_ReadFile(fsal_handle, (uint8_t *)&fifo_hdr, sizeof(fifo_hdr)) == FSAL_ERROR_FILE_ACCESS) ||
+		 (FSAL_ReadFile(fsal_handle, (uint8_t *)&fifo_hdr, sizeof(fifo_hdr)) < 0) ||
 		 (FSAL_CloseFile(fsal_handle) == FSAL_ERROR_FILE_ACCESS) ) {
 
 		/* file system access error */
 		if ( fsal_handle != -1 )
 			FSAL_CloseFile( fsal_handle );
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_FS_ACCESS_FAIL;
 	}
 
 	/* create a cache which directly mirrors the LUT file associated with the fifo */
 	if ( (FSAL_OpenFile(".lut", FSAL_FLAGS_BINARY | FSAL_FLAGS_READ_ONLY, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
-		 (FSAL_ReadFile(fsal_handle, (uint8_t *)fifo_lut_cache, DATAQ_LUT_FILE_SIZE_MAX) == FSAL_ERROR_FILE_ACCESS) ||
+		 (FSAL_ReadFile(fsal_handle, (uint8_t *)fifo_lut_cache, DATAQ_LUT_FILE_SIZE_MAX) < 0) ||
 		 (FSAL_CloseFile(fsal_handle) == FSAL_ERROR_FILE_ACCESS) ) {
 
 		/* file system access error */
 		if ( fsal_handle != -1 )
 			FSAL_CloseFile( fsal_handle );
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_FS_ACCESS_FAIL;
 	}
 
@@ -1206,6 +1244,7 @@ int DataQ_FifoGetEntry( DataQ_File_t * fifo_handle, void * data, size_t * size )
 		 (fifo_hdr.head_lut_offs == fifo_hdr.tail_lut_offs)  ) {
 
 		/* nothing to return */
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_QUEUE_IS_EMPTY;
 
 	}
@@ -1221,12 +1260,13 @@ int DataQ_FifoGetEntry( DataQ_File_t * fifo_handle, void * data, size_t * size )
 
 	/* extract the data from the LUT entry as indicated by the reference */
 	if ( (FSAL_OpenFile(fifo_lut_entry_reference, FSAL_FLAGS_BINARY | FSAL_FLAGS_READ_ONLY, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
-		 (FSAL_ReadFile(fsal_handle, (uint8_t *)data, *size) == FSAL_ERROR_FILE_ACCESS) ||
+		 (FSAL_ReadFile(fsal_handle, (uint8_t *)data, *size) < 0) ||
 		 (FSAL_CloseFile(fsal_handle) == FSAL_ERROR_FILE_ACCESS) ) {
 
 		/* file system access error */
 		if ( fsal_handle != -1 )
 			FSAL_CloseFile( fsal_handle );
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_FS_ACCESS_FAIL;
 	}
 
@@ -1237,16 +1277,18 @@ int DataQ_FifoGetEntry( DataQ_File_t * fifo_handle, void * data, size_t * size )
 
 	/* update the header (or metadata) file associated with the fifo */
 	if ( (FSAL_OpenFile(".header", FSAL_FLAGS_BINARY | FSAL_FLAGS_WRITE_ONLY, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
-		 (FSAL_WriteFile(fsal_handle, (uint8_t *)&fifo_hdr, sizeof(fifo_hdr)) == FSAL_ERROR_FILE_ACCESS) ||
+		 (FSAL_WriteFile(fsal_handle, (uint8_t *)&fifo_hdr, sizeof(fifo_hdr)) < 0) ||
 		 (FSAL_CloseFile(fsal_handle) == FSAL_ERROR_FILE_ACCESS) ) {
 
 		/* file system access error */
 		if ( fsal_handle != -1 )
 			FSAL_CloseFile( fsal_handle );
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_FS_ACCESS_FAIL;
 	}
 
 	/* operation succeeded */
+	FSAL_ChangeDirectory( "../" );
 	return CODE_STATUS_OK;
 }
 
@@ -1317,17 +1359,19 @@ int DataQ_FifoGetLength( DataQ_File_t * fifo_handle, size_t * length )
 	if ( (FSAL_ListFile( ".rolock" ) == FSAL_ERROR_FILE_ACCESS) &&
 	     (FSAL_ListFile( ".wolock" ) == FSAL_ERROR_FILE_ACCESS) &&
 		 (FSAL_ListFile( ".rwlock" ) == FSAL_ERROR_FILE_ACCESS) ) {
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_QUEUE_CLOSED;
 	}
 
 	/* open and read the header (or metadata) file associated with the fifo */
 	if ( (FSAL_OpenFile(".header", FSAL_FLAGS_BINARY | FSAL_FLAGS_READ_ONLY, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
-		 (FSAL_ReadFile(fsal_handle, (uint8_t *)&fifo_hdr, sizeof(fifo_hdr)) == FSAL_ERROR_FILE_ACCESS) ||
+		 (FSAL_ReadFile(fsal_handle, (uint8_t *)&fifo_hdr, sizeof(fifo_hdr)) < 0) ||
 		 (FSAL_CloseFile(fsal_handle) == FSAL_ERROR_FILE_ACCESS) ) {
 
 		/* file system access error */
 		if ( fsal_handle != -1 )
 			FSAL_CloseFile( fsal_handle );
+		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_FS_ACCESS_FAIL;
 	}
 
@@ -1335,5 +1379,6 @@ int DataQ_FifoGetLength( DataQ_File_t * fifo_handle, size_t * length )
 	*length = fifo_hdr.num_of_entries;
 
 	/* operation succeeded */
+	FSAL_ChangeDirectory( "../" );
 	return CODE_STATUS_OK;
 }
