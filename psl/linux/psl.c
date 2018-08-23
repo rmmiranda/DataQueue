@@ -58,9 +58,4 @@ void * PSL_memcpy (void *restrict to, const void *restrict from, size_t size)
 	return memcpy ( to, from, size );
 }
 
-int main(void)
-{
-	return 0;
-}
-
 #endif /* PSL_LINUX */

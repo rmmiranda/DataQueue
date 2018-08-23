@@ -110,6 +110,7 @@ typedef struct DataQ_Hdr {
 	uint8_t tail_lut_offs;
 	uint8_t seek_lut_offs;
 	uint8_t reserved;
+	uint16_t reference_count;
 	uint16_t flags;
 } DataQ_Hdr_t;
 
@@ -119,10 +120,10 @@ typedef struct DataQ_Hdr {
  * entry of the data queue
  */
 typedef struct DataQ_LUT_Entry {
-	char reference[16]; /** TBD: use macro for the array size */
+	char reference[DATA_QUEUE_LUT_ENTRY_SIZE];
 } DataQ_LUT_Entry_t;
 
-#define DATAQ_LUT_FILE_SIZE_MAX		(256 * 16)
+#define DATAQ_LUT_FILE_SIZE_MAX		(256 * DATA_QUEUE_LUT_ENTRY_SIZE)
 
 /** @brief Creates a first-in, first-out (FIFO) data queue.
  *

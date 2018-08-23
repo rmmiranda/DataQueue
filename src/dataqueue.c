@@ -87,6 +87,7 @@ int DataQ_FifoCreate( char * fifo_name, uint8_t max_entries, size_t max_entry_si
 		.head_lut_offs = 0,
 		.tail_lut_offs = 0,
 		.seek_lut_offs = 0,
+		.reference_count = 0,
 		.flags = flags,
 	};
 	DataQ_LUT_Entry_t fifo_lut_entry;
@@ -603,7 +604,7 @@ int DataQ_FifoEnqueue( DataQ_File_t * fifo_handle, void * data, size_t size )
 	DataQ_Hdr_t fifo_hdr;
 	DataQ_LUT_Entry_t fifo_lut_entry;
 	uint8_t fifo_lut_cache[ DATAQ_LUT_FILE_SIZE_MAX ] = { 0 };
-	char alpha_num[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+	char fifo_lut_entry_reference[DATA_QUEUE_LUT_ENTRY_SIZE + 1];
 	int index;
 
 	/* check mandatory arguments for NULL pointers */
@@ -676,13 +677,20 @@ int DataQ_FifoEnqueue( DataQ_File_t * fifo_handle, void * data, size_t size )
 		return CODE_ERROR_FS_ACCESS_FAIL;
 	}
 
-	/* initialize the LUT entry with random strings */
-	for ( index = 0; index < (sizeof(fifo_lut_entry.reference) - 1); index++ )
-		fifo_lut_entry.reference[ index ] = alpha_num[ rand() % (sizeof(alpha_num) - 1) ];
-	fifo_lut_entry.reference[ index ] = '\0';
+	/* increment reference count */
+	fifo_hdr.reference_count++;
+
+	/* initialize the LUT entry by converting reference count  as a revolving reference string */
+	for ( int base10 = 1, index = 0; index < (sizeof(fifo_lut_entry.reference) - 1); base10 *= 10, index++ ) {
+		fifo_lut_entry.reference[ index ] = '0' + ((fifo_hdr.reference_count % (base10 * 10)) / base10);
+	}
+
+	/* copy the LUT entry reference array and terminate to make it a string */
+	PSL_memcpy( fifo_lut_entry_reference, fifo_lut_entry.reference, DATA_QUEUE_LUT_ENTRY_SIZE);
+	fifo_lut_entry_reference[DATA_QUEUE_LUT_ENTRY_SIZE + 1] = '\0';
 
 	/* create a new file to contain the enqueued data */
-	if ( (FSAL_OpenFile(fifo_lut_entry.reference, FSAL_FLAGS_BINARY | FSAL_FLAGS_WRITE_ONLY | FSAL_FLAGS_CREATE, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
+	if ( (FSAL_OpenFile(fifo_lut_entry_reference, FSAL_FLAGS_BINARY | FSAL_FLAGS_WRITE_ONLY | FSAL_FLAGS_CREATE, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
 		 (FSAL_WriteFile(fsal_handle, (uint8_t *)data, size) == FSAL_ERROR_FILE_ACCESS) ||
 		 (FSAL_CloseFile(fsal_handle) == FSAL_ERROR_FILE_ACCESS) ) {
 
@@ -1126,6 +1134,7 @@ int DataQ_FifoGetEntry( DataQ_File_t * fifo_handle, void * data, size_t * size )
 	DataQ_Hdr_t fifo_hdr;
 	DataQ_LUT_Entry_t fifo_lut_entry;
 	uint8_t fifo_lut_cache[ DATAQ_LUT_FILE_SIZE_MAX ] = { 0 };
+	char fifo_lut_entry_reference[DATA_QUEUE_LUT_ENTRY_SIZE + 1];
 	int index;
 
 	/* check mandatory arguments for NULL pointers */
@@ -1206,9 +1215,12 @@ int DataQ_FifoGetEntry( DataQ_File_t * fifo_handle, void * data, size_t * size )
 			    fifo_lut_cache + (fifo_hdr.seek_lut_offs * sizeof(DataQ_LUT_Entry_t)),
 			    sizeof(DataQ_LUT_Entry_t) );
 
+	/* copy the LUT entry reference array and terminate to make it a string */
+	PSL_memcpy( fifo_lut_entry_reference, fifo_lut_entry.reference, DATA_QUEUE_LUT_ENTRY_SIZE);
+	fifo_lut_entry_reference[DATA_QUEUE_LUT_ENTRY_SIZE + 1] = '\0';
 
 	/* extract the data from the LUT entry as indicated by the reference */
-	if ( (FSAL_OpenFile(fifo_lut_entry.reference, FSAL_FLAGS_BINARY | FSAL_FLAGS_READ_ONLY, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
+	if ( (FSAL_OpenFile(fifo_lut_entry_reference, FSAL_FLAGS_BINARY | FSAL_FLAGS_READ_ONLY, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
 		 (FSAL_ReadFile(fsal_handle, (uint8_t *)data, *size) == FSAL_ERROR_FILE_ACCESS) ||
 		 (FSAL_CloseFile(fsal_handle) == FSAL_ERROR_FILE_ACCESS) ) {
 

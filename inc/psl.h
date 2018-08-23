@@ -32,6 +32,7 @@
  */
 #define DATA_QUEUE_FILE_HANDLE_LIST_MAX			PSL_FILE_HANDLE_LIST_MAX
 #define DATA_QUEUE_FILE_HANDLE_INVALID			PSL_FILE_HANDLE_INVALID
+#define DATA_QUEUE_LUT_ENTRY_SIZE				PSL_LUT_ENTRY_SIZE
 
 
 /** @brief Fills a memory block with a specific byte value.

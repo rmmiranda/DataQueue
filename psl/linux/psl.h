@@ -32,6 +32,7 @@
  */
 #define PSL_FILE_HANDLE_LIST_MAX				10
 #define PSL_FILE_HANDLE_INVALID					0
+#define PSL_LUT_ENTRY_SIZE						4
 
 #endif /* PSL_LINUX */
 
