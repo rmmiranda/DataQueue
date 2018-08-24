@@ -35,6 +35,18 @@
 #define DATA_QUEUE_LUT_ENTRY_SIZE				PSL_LUT_ENTRY_SIZE
 
 
+/** @brief The main entry point of the data queue.
+ *
+ *  This function runs the main application for the data quue.
+ *
+ *  @param none
+ *
+ *  @return none
+ *
+ */
+extern void * PSL_main ( int argc, char * argv[] );
+
+
 /** @brief Fills a memory block with a specific byte value.
  *
  *  This function copies the passed byte value into each of the bytes
