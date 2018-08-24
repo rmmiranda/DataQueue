@@ -65,9 +65,11 @@ static DataQCmd_t command_list[DATAQ_CMD_MAX] = {
 	{ "length",  DataQ_Length_CLI  },
 };
 
+#ifdef SERIAL_CONSOLE
 static char command_buffer[64] = {0};
 static unsigned short command_buffer_length = 0;
 static unsigned short command_buffer_index = 0;
+#endif
 
 void DataQ_Create_CLI( int argc, char * argv[] )
 {
@@ -413,6 +415,7 @@ int PSM_main( int argc, char * argv[] )
 	/* initiliaze the data queue engine */
 	DataQ_InitEngine();
 
+#ifdef SERIAL_CONSOLE
 	while (1 ) {
 
 		/* retrieves the command string from standard input */
@@ -466,6 +469,28 @@ int PSM_main( int argc, char * argv[] )
 			command_buffer_index++;
 		}
 	}
+#else
+
+	command_args_index = argc;
+	for (index = 0; index < command_args_index; index++) {
+		command_args[index] = argv[index];
+	}
+
+	if ( command_args_index ) {
+
+		/* lookup for existing command handlers */
+		for( index = 0, command_handler = NULL; index < DATAQ_CMD_MAX; index++ ) {
+			if( strcmp(command_list[index].name, command_args[0]) == 0 ) {
+				command_handler = command_list[index].handler;
+			}
+		}
+
+		/* process command */
+		if ( command_handler )
+			command_handler( command_args_index, command_args );
+	}
+
+#endif
 
 	return 0;
 }
