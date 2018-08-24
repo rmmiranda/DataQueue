@@ -13,7 +13,16 @@ FLAGS := -O3 -mthumb -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard
 #
 # Include directories
 #
-INC := -Iinc
+INC := -Iinc \
+	-I../segger-emfile/FS \
+	-I../segger-emfile/SEGGER \
+	-I../segger-emfile/Config \
+
+#
+# Libraries
+#
+LIBS := -L../segger-emfile/build \
+	-lemfile
 
 #
 # Output directory where .o files and static library will be generated
@@ -31,17 +40,36 @@ SRC := src/dataqueue.c
 DATA_QUEUE_PSL := -DPSL_LINUX
 DATA_QUEUE_FSAL := -DFSAL_SEGGER_EMFILE
 
-SRC += psl/psl.c
-SRC += psl/test.c
-SRC += fsal/segger-emfile/fsal.c
+#
+# Conditional inclusion of source files based on PSL selection
+#
+ifeq ($(DATA_QUEUE_PSL),-DPSL_LINUX)
+		SRC += psl/linux/psl.c
+		SRC += psl/linux/test.c
+		INC += -Ipsl
+else
+		$(error No PSL (Platform Software Layer) defined in Makefile)
+endif
 
-INC += -Ipsl
-INC += -Ifsal/segger-emfile
-INC += -I../segger-emfile/FS
-INC += -I../segger-emfile/SEGGER
-INC += -I../segger-emfile/Config
-INC += -L../segger-emfile/build -lemfile
+#
+# Conditional inclusion of source files based on FSAL selection
+#
+ifeq ($(DATA_QUEUE_FSAL),-DFSAL_LINUX_EXT4)
+		SRC += fsal/linux_ext4/fsal.c
+		INC += fsal/linux_ext4
+else ifeq ($(DATA_QUEUE_FSAL),-DFSAL_SEGGER_EMFILE)
+		SRC += fsal/segger-emfile/fsal.c
+		INC += -Ifsal/segger-emfile
+else ifeq ($(DATA_QUEUE_FSAL),-DFSAL_SEGGER_STUB)
+		SRC += fsal/stub/fsal.c
+		INC += fsal/stub
+else
+		$(error No FSAL (File System Abstraction Layer) defined in Makefile)
+endif
 
+#
+# Converting source files into objects using path substitution
+#
 OBJ := $(patsubst %.c,$(OBJ_DIR)/%.o,$(notdir $(SRC)))
 
 #
@@ -52,14 +80,11 @@ TARGET = $(OBJ_DIR)/libdataqueue.a
 $(TARGET): build/dataqueue.o build/psl.o build/fsal.o
 	$(AR) rcs $@ $^
 
-build/dataqueue.o: src/dataqueue.c
-		$(CC) $(FLAGS) $(INC) $(DATA_QUEUE_PSL) $(DATA_QUEUE_FSAL) -c $< -o $@
-
-build/fsal.o: fsal/segger-emfile/fsal.c
-		$(CC) $(FLAGS) $(INC) $(DATA_QUEUE_PSL) $(DATA_QUEUE_FSAL) -c $< -o $@
-
-build/psl.o: psl/linux/psl.c
-		$(CC) $(FLAGS) $(INC) $(DATA_QUEUE_PSL) $(DATA_QUEUE_FSAL) -c $< -o $@
+#
+# Rule to build object files from source files in multiple directories
+#
+$(OBJ): $(SRC)
+		$(CC) $(FLAGS) $(INC) $(LIBS) $(DATA_QUEUE_PSL) $(DATA_QUEUE_FSAL) -c $< -o $@
 
 #
 # Rule to clean all compilation artifacts
@@ -72,3 +97,4 @@ clean:
 #
 $(shell mkdir -p $(OBJ_DIR))
 
+print-%  : ; @echo $* = $($*)
