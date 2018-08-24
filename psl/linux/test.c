@@ -370,7 +370,7 @@ void DataQ_Length_CLI( int argc, char * argv[] )
  *  @return int - the exit status code of the application
  *
  */
-int PSM_main( int argc, char * argv[] )
+int PSL_main( int argc, char * argv[] )
 {
 	char * command_args[10];
 	unsigned char command_args_index;
