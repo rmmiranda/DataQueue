@@ -22,7 +22,7 @@
 #define __FSAL_H__
 
 #if defined( FSAL_SEGGER_EMFILE )
-#include "../fsal/segger-emfile/fsal.h"
+#include "../fsal/emFile/fsal.h"
 #elif defined( FSAL_LINUX_EXT4 )
 #include "../fsal/linux_ext4/fsal.h"
 #elif defined( FSAL_STUB )
@@ -53,6 +53,17 @@
 
 typedef int FSAL_File_t;
 
+
+/** @brief Initializes the filesystem for use
+ *
+ *  This function performs the required filesystem-specific
+ *  initialization sequence.
+ *
+ *  @param none
+ *
+ *  @return none
+ */
+extern void FSAL_Init( void );
 
 /** @brief Creates a directory.
  *

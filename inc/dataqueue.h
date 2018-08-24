@@ -127,6 +127,19 @@ typedef struct DataQ_LUT_Entry {
 
 #define DATAQ_LUT_FILE_SIZE_MAX		(256 * DATA_QUEUE_LUT_ENTRY_SIZE)
 
+
+/** @brief Performs initialization of the first-in, first-out (FIFO)
+ *         data queue engine
+ *
+ *  This function initializes the data queue engine including the
+ *  underlying filesystem abstraction layer.
+ *
+ *  @param none
+ *
+ *  @return none
+ */
+void DataQ_InitEngine( void );
+
 /** @brief Creates a first-in, first-out (FIFO) data queue.
  *
  *  This function creates a specific type of data queue where first

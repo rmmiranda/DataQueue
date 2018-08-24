@@ -410,6 +410,9 @@ int main( int argc, char * argv[] )
 	printf( "\r\n" );
 	printf( "\r\nDataQ/>" );
 
+	/* initiliaze the data queue engine */
+	DataQ_InitEngine();
+
 	while (1 ) {
 
 		/* retrieves the command string from standard input */

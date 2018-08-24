@@ -26,6 +26,22 @@
  */
 static DataQ_File_t DataQ_FileHandleList[ DATA_QUEUE_FILE_HANDLE_LIST_MAX ] = { { { DATA_QUEUE_FILE_HANDLE_INVALID } } };
 
+/** @brief Performs initialization of the first-in, first-out (FIFO)
+ *         data queue engine
+ *
+ *  This function initializes the data queue engine including the
+ *  underlying filesystem abstraction layer.
+ *
+ *  @param none
+ *
+ *  @return none
+ */
+void DataQ_InitEngine( void )
+{
+	/* call the underlying filesystem abstraction layer */
+	FSAL_Init();
+}
+
 /** @brief Creates a first-in, first-out (FIFO) data queue.
  *
  *  This function creates a specific type of data queue where first

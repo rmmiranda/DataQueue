@@ -27,6 +27,22 @@
 #include <sys/types.h>
 #include <dirent.h>
 
+/** @brief Initializes the filesystem for use
+ *
+ *  This function performs the required filesystem-specific
+ *  initialization sequence.
+ *
+ *  @param none
+ *
+ *  @return none
+ */
+
+void FSAL_Init( void )
+{
+	/* nothing to do */
+	return;
+}
+
 /** @brief Creates a directory.
  *
  *  This function creates a directory into the filesystem in
@@ -286,6 +302,9 @@ int FSAL_CloseFile( FSAL_File_t fsal_handle )
 		return FSAL_ERROR_FILE_ACCESS;
 	}
 
+	/* close the file */
+	close( fd );
+
 	return FSAL_STATUS_OK;
 }
 
@@ -363,7 +382,7 @@ size_t FSAL_WriteFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length 
 		}
 	}
 
-	return length;
+	return actual_length;
 }
 
 /** @brief Deletes a file.
