@@ -22,7 +22,7 @@
 #define __FSAL_H__
 
 #if defined( FSAL_SEGGER_EMFILE )
-#include "../fsal/emFile/fsal.h"
+#include "../fsal/segger-emfile/fsal.h"
 #elif defined( FSAL_LINUX_EXT4 )
 #include "../fsal/linux_ext4/fsal.h"
 #elif defined( FSAL_STUB )

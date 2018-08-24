@@ -21,11 +21,28 @@
 #include "../../inc/fsal.h"
 
 #include <stdio.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <dirent.h>
+#include <string.h>
+
+static char current_working_dir[20] = {0};
+
+/** @brief Initializes the filesystem for use
+ *
+ *  This function performs the required filesystem-specific
+ *  initialization sequence.
+ *
+ *  @param none
+ *
+ *  @return none
+ */
+
+void FSAL_Init( void )
+{
+	/* initiliaze emFile filesystem */
+	FS_Init();
+
+	/* set current working directory to root */
+	snprintf( current_working_dir, sizeof(current_working_dir), "" );
+}
 
 /** @brief Creates a directory.
  *
@@ -43,13 +60,17 @@
  */
 int FSAL_MakeDirectory( char * dir_name )
 {
+	char dir_path_name[20] = {0};
+
 	/* sanity checks */
 	if ( dir_name == NULL ) {
 		return FSAL_ERROR_DIR_ACCESS;
 	}
 
-	/* create a directory with read/write access */
-	if ( mkdir(dir_name, 0777) == -1 ) {
+	snprintf( dir_path_name, sizeof(dir_path_name), "%s\\%s", current_working_dir, dir_name );
+
+	/* create a directory (assumed with read/write access) */
+	if ( FS_MkDir(dir_path_name) != 0 ) {
 		return FSAL_ERROR_DIR_ACCESS;
 	}
 
@@ -73,14 +94,32 @@ int FSAL_MakeDirectory( char * dir_name )
  */
 int FSAL_ChangeDirectory( char * dir_name )
 {
+	FS_FIND_DATA fd;
+	char dir_path_name[20] = {0};
+	char file_name[20] = {0};
+
 	/* sanity checks */
 	if ( dir_name == NULL ) {
 		return FSAL_ERROR_DIR_ACCESS;
 	}
 
-	/* change working directory as specified */
-	if ( chdir(dir_name) == -1 ) {
-		return FSAL_ERROR_DIR_ACCESS;
+	if ( strcmp(dir_name, "../") == 0 ) {
+
+		snprintf( current_working_dir, sizeof(current_working_dir), "" );
+		current_working_dir[ strlen("") ] = '\0';
+
+	} else {
+
+		snprintf( dir_path_name, sizeof(dir_path_name), "%s\\%s", current_working_dir, dir_name );
+
+		if ( FS_FindFirstFile(&fd, dir_path_name, file_name, sizeof(file_name)) == 0 ) {
+
+			snprintf( current_working_dir, sizeof(current_working_dir), "%s", dir_path_name );
+			current_working_dir[ strlen(dir_path_name) ] = '\0';
+
+		}
+
+		FS_FindClose( &fd );
 	}
 
 	return FSAL_STATUS_OK;
@@ -102,35 +141,17 @@ int FSAL_ChangeDirectory( char * dir_name )
  */
 int FSAL_RemoveDirectory( char * dir_name )
 {
-	char file_name[32] = {0};
-	struct dirent * de;
-	DIR * dr;
+	char dir_path_name[20] = {0};
 
 	/* sanity checks */
 	if ( dir_name == NULL ) {
 		return FSAL_ERROR_DIR_ACCESS;
 	}
 
-	/* open the specified directory */
-	dr = opendir( dir_name );
-	if ( dr == NULL ) {
-		return FSAL_ERROR_DIR_ACCESS;
-	}
+	snprintf( dir_path_name, sizeof(dir_path_name), "%s\\%s", current_working_dir, dir_name );
 
-	/* list all files in the directory */
-	de = readdir( dr );
-	while ( de != NULL ) {
-		if ((strcmp(de->d_name, ".") != 0) && (strcmp(de->d_name, "..") != 0)) {
-			sprintf(file_name, "%s/%s", dir_name, de->d_name);
-			unlink(file_name);
-		}
-		de = readdir( dr );
-	}
-
-	closedir( dr );
-
-	/* delete the specified directory */
-	if ( rmdir(dir_name) == -1 ) {
+	/* delete the specified directory up to 2 levels deep */
+	if ( FS_DeleteDir(dir_path_name, 2) != 0 ) {
 		return FSAL_ERROR_DIR_ACCESS;
 	}
 
@@ -153,29 +174,8 @@ int FSAL_RemoveDirectory( char * dir_name )
  */
 int FSAL_ListDirectory( char * dir_name )
 {
-	struct dirent * de;
-	DIR * dr;
-
-	/* sanity checks */
-	if ( dir_name == NULL ) {
-		return FSAL_ERROR_DIR_ACCESS;
-	}
-
-	/* open the specified directory */
-	dr = opendir( dir_name );
-	if ( dr == NULL ) {
-		return FSAL_ERROR_DIR_ACCESS;
-	}
-
-	/* list all files in the directory */
-	de = readdir( dr );
-	while ( de != NULL ) {
-		printf( "%s\n", de->d_name );
-	}
-
-	closedir( dr );
-
-	return FSAL_STATUS_OK;
+	/* not implemented */
+	return FSAL_ERROR_DIR_ACCESS;
 }
 
 /** @brief Lists a file.
@@ -193,21 +193,24 @@ int FSAL_ListDirectory( char * dir_name )
  */
 int FSAL_ListFile( char * file_name )
 {
-	int fd;
+	FS_FILE * fd;
+	char file_path[20] = {0};
 
 	/* sanity checks */
 	if ( file_name == NULL ) {
 		return FSAL_ERROR_FILE_ACCESS;
 	}
 
+	snprintf( file_path, sizeof(file_path), "%s\\%s", current_working_dir, file_name);
+
 	/* open the specified file */
-	fd = open( file_name, O_RDWR, 0 );
-	if ( fd == -1 ) {
+	fd = FS_FOpen( file_path, "rb" );
+	if ( fd == 0 ) {
 		return FSAL_ERROR_FILE_ACCESS;
 	}
 
 	/* close the file */
-	close( fd );
+	FS_FClose( fd );
 
 	return FSAL_STATUS_OK;
 }
@@ -232,28 +235,49 @@ int FSAL_ListFile( char * file_name )
  */
 int FSAL_OpenFile( char * file_name, int flags, FSAL_File_t * fsal_handle )
 {
-	int fd;
-	int open_flags = 0;
+	FS_FILE * fd;
+	char file_path[20] = {0};
 
 	/* sanity checks */
 	if ( file_name == NULL ) {
 		return FSAL_ERROR_FILE_ACCESS;
 	}
 
-	if (flags & FSAL_FLAGS_CREATE )
-		open_flags |= O_CREAT;
+	snprintf( file_path, sizeof(file_path), "%s\\%s", current_working_dir, file_name);
 
-	if (flags & FSAL_FLAGS_READ_ONLY )
-		open_flags |= O_RDONLY;
-	else if (flags & FSAL_FLAGS_WRITE_ONLY )
-		open_flags |= O_WRONLY;
-	else
-		open_flags |= O_RDWR;
+	if (flags & FSAL_FLAGS_CREATE ) {
+		/* create the specified file */
+		fd = FS_FOpen( file_path, "wb" );
+		if ( fd == 0 ) {
+			return FSAL_ERROR_FILE_ACCESS;
+		}
+		FS_FClose( fd );
+	}
 
-	/* open the specified file */
-	fd = open( file_name, open_flags, 0777 );
-	if ( fd == -1 ) {
-		return FSAL_ERROR_FILE_ACCESS;
+	if (flags & FSAL_FLAGS_READ_ONLY ) {
+
+		/* open the specified file for reading only */
+		fd = FS_FOpen( file_path, "rb" );
+		if ( fd == 0 ) {
+			return FSAL_ERROR_FILE_ACCESS;
+		}
+
+	} else if (flags & FSAL_FLAGS_WRITE_ONLY ) {
+
+		/* open the specified file for writing only */
+		fd = FS_FOpen( file_path, "wb" );
+		if ( fd == 0 ) {
+			return FSAL_ERROR_FILE_ACCESS;
+		}
+
+	} else {
+
+		/* open the specified file for reading and writing */
+		fd = FS_FOpen( file_path, "r+b" );
+		if ( fd == 0 ) {
+			return FSAL_ERROR_FILE_ACCESS;
+		}
+
 	}
 
 	/* copy the handle to the output parameter */
@@ -279,12 +303,14 @@ int FSAL_OpenFile( char * file_name, int flags, FSAL_File_t * fsal_handle )
  */
 int FSAL_CloseFile( FSAL_File_t fsal_handle )
 {
-	int fd = (int) fsal_handle;
+	FS_FILE * fd = (FS_FILE *) fsal_handle;
 
 	/* sanity check */
-	if ( fd == -1 ) {
+	if ( fd == 0 ) {
 		return FSAL_ERROR_FILE_ACCESS;
 	}
+
+	FS_FClose( fd );
 
 	return FSAL_STATUS_OK;
 }
@@ -309,18 +335,21 @@ int FSAL_CloseFile( FSAL_File_t fsal_handle )
  */
 size_t FSAL_ReadFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length )
 {
-	int fd = (int) fsal_handle;
+	FS_FILE * fd = (FS_FILE *) fsal_handle;
 	size_t actual_length = 0;
 
 	/* sanity checks */
-	if ( (fd == -1) || (buffer == NULL) ) {
+	if ( (fd == 0) || (buffer == NULL) ) {
 		return -FSAL_ERROR_FILE_ACCESS;
 	}
 
 	/* proceed operation with nonzero length */
 	if ( length ) {
-		actual_length = read( fd, buffer, length );
-		if ( actual_length == -1 ) {
+		actual_length = FS_FRead( buffer, 1, length, fd );
+		if ( (actual_length != length) &&
+			 (FS_FError(fd) != FS_ERR_OK) ) {
+
+			FS_ClearErr( fd );
 			return -FSAL_ERROR_FILE_ACCESS;
 		}
 	}
@@ -347,23 +376,26 @@ size_t FSAL_ReadFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length )
  */
 size_t FSAL_WriteFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length )
 {
-	int fd = (int) fsal_handle;
+	FS_FILE * fd = (FS_FILE *) fsal_handle;
 	size_t actual_length = 0;
 
 	/* sanity checks */
-	if ( (fd == -1) || (buffer == NULL) ) {
+	if ( (fd == 0) || (buffer == NULL) ) {
 		return -FSAL_ERROR_FILE_ACCESS;
 	}
 
 	/* proceed operation with nonzero length */
 	if ( length ) {
-		actual_length = write( fd, buffer, length );
-		if ( actual_length == -1 ) {
+		actual_length = FS_Write( buffer, 1, length, fd );
+		if ( (actual_length != length) &&
+			 (FS_FError(fd) != FS_ERR_OK) ) {
+
+			FS_ClearErr( fd );
 			return -FSAL_ERROR_FILE_ACCESS;
 		}
 	}
 
-	return length;
+	return actual_length;
 }
 
 /** @brief Deletes a file.
@@ -382,13 +414,17 @@ size_t FSAL_WriteFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length 
  */
 int FSAL_DeleteFile( char * file_name )
 {
+	char file_path[20] = {0};
+
 	/* sanity checks */
 	if ( file_name == NULL ) {
 		return FSAL_ERROR_FILE_ACCESS;
 	}
 
+	snprintf( file_path, sizeof(file_path), "%s\\%s", current_working_dir, file_name);
+
 	/* delete the specified file */
-	if ( unlink(file_name) == -1 ) {
+	if ( FS_Remove(file_path) != 0 ) {
 		return FSAL_ERROR_FILE_ACCESS;
 	}
 
