@@ -32,6 +32,12 @@
 #define ASCII_CODE_ESC						0x1B
 #define ASCII_CODE_DEL						0x7F
 
+#ifdef SERIAL_CONSOLE
+#define SERIAL_PRINT(fmt, ...)	printf(fmt, ##__VA_ARGS__)
+#else
+#define SERIAL_PRINT(fmt, ...)
+#endif
+
 void DataQ_Create_CLI( int argc, char * argv[] );
 void DataQ_Destroy_CLI( int argc, char * argv[] );
 void DataQ_Enqueue_CLI( int argc, char * argv[] );
@@ -80,12 +86,12 @@ void DataQ_Create_CLI( int argc, char * argv[] )
 	int dataq_status;
 
 	if ( argc < 4 ) {
-		printf( "Usage:" );
-		printf( "\r\ncreate <fifo-name> <fifo-size> <fifo-item-size>" );
-		printf( "\r\n - creates a first-in, first-out (FIFO) data queue called" );
-		printf( "\r\n   <fifo-name> and can store up to maximum of <fifo-size>" );
-		printf( "\r\n   items with each fifo item has size of <fifo-item-size>" );
-		printf( "\r\n   bytes" );
+		SERIAL_PRINT( "Usage:" );
+		SERIAL_PRINT( "\r\ncreate <fifo-name> <fifo-size> <fifo-item-size>" );
+		SERIAL_PRINT( "\r\n - creates a first-in, first-out (FIFO) data queue called" );
+		SERIAL_PRINT( "\r\n   <fifo-name> and can store up to maximum of <fifo-size>" );
+		SERIAL_PRINT( "\r\n   items with each fifo item has size of <fifo-item-size>" );
+		SERIAL_PRINT( "\r\n   bytes" );
 
 		return;
 	}
@@ -97,9 +103,9 @@ void DataQ_Create_CLI( int argc, char * argv[] )
 
 	dataq_status = DataQ_FifoCreate( fifo_name, fifo_size, fifo_item_size, FLAGS_RANDOM_ACCESS );
 	if ( dataq_status == CODE_STATUS_OK ) {
-		printf( "Operation succeeded" );
+		SERIAL_PRINT( "Operation succeeded" );
 	} else {
-		printf( "Operation failed (error code = %d)", dataq_status );
+		SERIAL_PRINT( "Operation failed (error code = %d)", dataq_status );
 	}
 
 	return;
@@ -111,10 +117,10 @@ void DataQ_Destroy_CLI( int argc, char * argv[] )
 	int dataq_status;
 
 	if ( argc < 2 ) {
-		printf( "Usage:" );
-		printf( "\r\ndestroy <fifo-name>" );
-		printf( "\r\n - destroys the first-in, first-out (FIFO) data queue as" );
-		printf( "\r\n   specified by the name <fifo-name>" );
+		SERIAL_PRINT( "Usage:" );
+		SERIAL_PRINT( "\r\ndestroy <fifo-name>" );
+		SERIAL_PRINT( "\r\n - destroys the first-in, first-out (FIFO) data queue as" );
+		SERIAL_PRINT( "\r\n   specified by the name <fifo-name>" );
 
 		return;
 	}
@@ -124,9 +130,9 @@ void DataQ_Destroy_CLI( int argc, char * argv[] )
 
 	dataq_status = DataQ_FifoDestroy( fifo_name );
 	if ( dataq_status == CODE_STATUS_OK ) {
-		printf( "Operation succeeded" );
+		SERIAL_PRINT( "Operation succeeded" );
 	} else {
-		printf( "Operation failed (error code = %d)", dataq_status );
+		SERIAL_PRINT( "Operation failed (error code = %d)", dataq_status );
 	}
 
 	return;
@@ -140,11 +146,11 @@ void DataQ_Enqueue_CLI( int argc, char * argv[] )
 	int dataq_status;
 
 	if ( argc < 3 ) {
-		printf( "Usage:" );
-		printf( "\r\nenqueue <fifo-name> <fifo-item-data>" );
-		printf( "\r\n - opens the first-in, first-out (FIFO) data queue called" );
-		printf( "\r\n   <fifo-name>, adds a FIFO item containing the string data" );
-		printf( "\r\n   specified in <fifo-item-data>, and closes the FIFO" );
+		SERIAL_PRINT( "Usage:" );
+		SERIAL_PRINT( "\r\nenqueue <fifo-name> <fifo-item-data>" );
+		SERIAL_PRINT( "\r\n - opens the first-in, first-out (FIFO) data queue called" );
+		SERIAL_PRINT( "\r\n   <fifo-name>, adds a FIFO item containing the string data" );
+		SERIAL_PRINT( "\r\n   specified in <fifo-item-data>, and closes the FIFO" );
 
 		return;
 	}
@@ -161,24 +167,24 @@ void DataQ_Enqueue_CLI( int argc, char * argv[] )
 
 	if ( dataq_status == CODE_STATUS_OK ) {
 
-		printf( "Open operation succeeded\n" );
+		SERIAL_PRINT( "Open operation succeeded\n" );
 
 		dataq_status = DataQ_FifoEnqueue( fifo_handle, fifo_item_data, strlen(fifo_item_data) );
 		if ( dataq_status == CODE_STATUS_OK ) {
-			printf( "Enqueue operation succeeded\n" );
+			SERIAL_PRINT( "Enqueue operation succeeded\n" );
 		} else {
-			printf( "Enqueue operation failed (error code = %d)\n", dataq_status );
+			SERIAL_PRINT( "Enqueue operation failed (error code = %d)\n", dataq_status );
 		}
 
 		dataq_status = DataQ_FifoClose( fifo_handle );
 		if ( dataq_status == CODE_STATUS_OK ) {
-			printf( "Close operation succeeded" );
+			SERIAL_PRINT( "Close operation succeeded" );
 		} else {
-			printf( "Close operation failed (error code = %d)\n", dataq_status );
+			SERIAL_PRINT( "Close operation failed (error code = %d)\n", dataq_status );
 		}
 
 	} else {
-		printf( "Open operation failed (error code = %d)", dataq_status );
+		SERIAL_PRINT( "Open operation failed (error code = %d)", dataq_status );
 	}
 
 	return;
@@ -193,12 +199,12 @@ void DataQ_Dequeue_CLI( int argc, char * argv[] )
 	int dataq_status;
 
 	if ( argc < 2 ) {
-		printf( "Usage:" );
-		printf( "\r\ndequeue <fifo-name>" );
-		printf( "\r\n - opens the first-in, first-out (FIFO) data queue called" );
-		printf( "\r\n   <fifo-name>, removes the oldest FIFO item, and closes the" );
-		printf( "\r\n   FIFO (the string data associated with the removed item is" );
-		printf( "\r\n   printed to the console)" );
+		SERIAL_PRINT( "Usage:" );
+		SERIAL_PRINT( "\r\ndequeue <fifo-name>" );
+		SERIAL_PRINT( "\r\n - opens the first-in, first-out (FIFO) data queue called" );
+		SERIAL_PRINT( "\r\n   <fifo-name>, removes the oldest FIFO item, and closes the" );
+		SERIAL_PRINT( "\r\n   FIFO (the string data associated with the removed item is" );
+		SERIAL_PRINT( "\r\n   printed to the console)" );
 
 		return;
 	}
@@ -214,24 +220,24 @@ void DataQ_Dequeue_CLI( int argc, char * argv[] )
 
 	if ( dataq_status == CODE_STATUS_OK ) {
 
-		printf( "Open operation succeeded\n" );
+		SERIAL_PRINT( "Open operation succeeded\n" );
 
 		dataq_status = DataQ_FifoDequeue( fifo_handle, fifo_item_data, &fifo_item_length );
 		if ( dataq_status == CODE_STATUS_OK ) {
-			printf( "Dequeue operation succeeded (item data: %s)\n", fifo_item_data );
+			SERIAL_PRINT( "Dequeue operation succeeded (item data: %s)\n", fifo_item_data );
 		} else {
-			printf( "Dequeue operation failed (error code = %d)\n", dataq_status );
+			SERIAL_PRINT( "Dequeue operation failed (error code = %d)\n", dataq_status );
 		}
 
 		dataq_status = DataQ_FifoClose( fifo_handle );
 		if ( dataq_status == CODE_STATUS_OK ) {
-			printf( "Close operation succeeded" );
+			SERIAL_PRINT( "Close operation succeeded" );
 		} else {
-			printf( "Close operation failed (error code = %d)\n", dataq_status );
+			SERIAL_PRINT( "Close operation failed (error code = %d)\n", dataq_status );
 		}
 
 	} else {
-		printf( "Open operation failed (error code = %d)", dataq_status );
+		SERIAL_PRINT( "Open operation failed (error code = %d)", dataq_status );
 	}
 
 	return;
@@ -247,14 +253,14 @@ void DataQ_Fetch_CLI( int argc, char * argv[] )
 	int dataq_status;
 
 	if ( argc < 2 ) {
-		printf( "Usage:" );
-		printf( "\r\nfetch <fifo-name> [<fifo-item-index]" );
-		printf( "\r\n - opens the first-in, first-out (FIFO) data queue called" );
-		printf( "\r\n   <fifo-name>, reads either the oldest FIFO item or, if the" );
-		printf( "\r\n   optional <fifo-item-index> is indicated, the FIFO item as" );
-		printf( "\r\n   specified by <fifo-item-index>, and closes the FIFO (the" );
-		printf( "\r\n   string data associated with the read FIFO item is printed" );
-		printf( "\r\n   to the console)" );
+		SERIAL_PRINT( "Usage:" );
+		SERIAL_PRINT( "\r\nfetch <fifo-name> [<fifo-item-index]" );
+		SERIAL_PRINT( "\r\n - opens the first-in, first-out (FIFO) data queue called" );
+		SERIAL_PRINT( "\r\n   <fifo-name>, reads either the oldest FIFO item or, if the" );
+		SERIAL_PRINT( "\r\n   optional <fifo-item-index> is indicated, the FIFO item as" );
+		SERIAL_PRINT( "\r\n   specified by <fifo-item-index>, and closes the FIFO (the" );
+		SERIAL_PRINT( "\r\n   string data associated with the read FIFO item is printed" );
+		SERIAL_PRINT( "\r\n   to the console)" );
 
 		return;
 	}
@@ -273,33 +279,33 @@ void DataQ_Fetch_CLI( int argc, char * argv[] )
 
 	if ( dataq_status == CODE_STATUS_OK ) {
 
-		printf( "Open operation succeeded\n" );
+		SERIAL_PRINT( "Open operation succeeded\n" );
 
 		dataq_status = DataQ_FifoSeek( fifo_handle, SEEK_TYPE_POSITION, fifo_item_index );
 		if ( dataq_status == CODE_STATUS_OK ) {
 
-			printf( "Seek operation succeeded\n" );
+			SERIAL_PRINT( "Seek operation succeeded\n" );
 
 			dataq_status = DataQ_FifoGetEntry( fifo_handle, fifo_item_data, &fifo_item_length );
 			if ( dataq_status == CODE_STATUS_OK ) {
-				printf( "Get entry operation succeeded (item data: %s)\n", fifo_item_data );
+				SERIAL_PRINT( "Get entry operation succeeded (item data: %s)\n", fifo_item_data );
 			} else {
-				printf( "Get entry operation failed (error code = %d)\n", dataq_status );
+				SERIAL_PRINT( "Get entry operation failed (error code = %d)\n", dataq_status );
 			}
 
 		} else {
-			printf( "Seek operation failed (error code = %d)\n", dataq_status );
+			SERIAL_PRINT( "Seek operation failed (error code = %d)\n", dataq_status );
 		}
 
 		dataq_status = DataQ_FifoClose( fifo_handle );
 		if ( dataq_status == CODE_STATUS_OK ) {
-			printf( "Close operation succeeded" );
+			SERIAL_PRINT( "Close operation succeeded" );
 		} else {
-			printf( "Close operation failed (error code = %d)\n", dataq_status );
+			SERIAL_PRINT( "Close operation failed (error code = %d)\n", dataq_status );
 		}
 
 	} else {
-		printf( "Open operation failed (error code = %d)", dataq_status );
+		SERIAL_PRINT( "Open operation failed (error code = %d)", dataq_status );
 	}
 
 	return;
@@ -314,11 +320,11 @@ void DataQ_Length_CLI( int argc, char * argv[] )
 	size_t fifo_length;
 
 	if ( argc < 2 ) {
-		printf( "Usage:" );
-		printf( "\r\nlength <fifo-name>" );
-		printf( "\r\n - opens the first-in, first-out (FIFO) data queue called" );
-		printf( "\r\n   <fifo-name>, reads the current length of the FIFO, and" );
-		printf( "\r\n   closes the FIFO (the read length is printed to the console)" );
+		SERIAL_PRINT( "Usage:" );
+		SERIAL_PRINT( "\r\nlength <fifo-name>" );
+		SERIAL_PRINT( "\r\n - opens the first-in, first-out (FIFO) data queue called" );
+		SERIAL_PRINT( "\r\n   <fifo-name>, reads the current length of the FIFO, and" );
+		SERIAL_PRINT( "\r\n   closes the FIFO (the read length is printed to the console)" );
 
 		return;
 	}
@@ -334,24 +340,24 @@ void DataQ_Length_CLI( int argc, char * argv[] )
 
 	if ( dataq_status == CODE_STATUS_OK ) {
 
-		printf( "Open operation succeeded\n" );
+		SERIAL_PRINT( "Open operation succeeded\n" );
 
 		dataq_status = DataQ_FifoGetLength( fifo_handle, &fifo_length );
 		if ( dataq_status == CODE_STATUS_OK ) {
-			printf( "Get length operation succeeded (length = %d)\n", (int)fifo_length );
+			SERIAL_PRINT( "Get length operation succeeded (length = %d)\n", (int)fifo_length );
 		} else {
-			printf( "Get length operation failed (error code = %d)\n", dataq_status );
+			SERIAL_PRINT( "Get length operation failed (error code = %d)\n", dataq_status );
 		}
 
 		dataq_status = DataQ_FifoClose( fifo_handle );
 		if ( dataq_status == CODE_STATUS_OK ) {
-			printf( "Close operation succeeded" );
+			SERIAL_PRINT( "Close operation succeeded" );
 		} else {
-			printf( "Close operation failed (error code = %d)\n", dataq_status );
+			SERIAL_PRINT( "Close operation failed (error code = %d)\n", dataq_status );
 		}
 
 	} else {
-		printf( "Open operation failed (error code = %d)", dataq_status );
+		SERIAL_PRINT( "Open operation failed (error code = %d)", dataq_status );
 	}
 
 	return;
@@ -377,40 +383,40 @@ int PSL_main( int argc, char * argv[] )
 	DATAQ_CMD_FUNC command_handler;
 	int index;
 
-	printf( "\r\nCommand Line Interface (CLI) for TR M7 DataQ" );
-	printf( "\r\nCopyright 2018, Swift Labs" );
-	printf( "\r\n" );
-	printf( "\r\nAvailable Commands:" );
-	printf( "\r\n  create <fifo-name> <fifo-size> <fifo-item-size> <fifo-type>" );
-	printf( "\r\n         - creates a first-in, first-out (FIFO) data queue called" );
-	printf( "\r\n           <fifo-name> and can store up to maximum of <fifo-size>" );
-	printf( "\r\n           items with each fifo item has size of <fifo-item-size>" );
-	printf( "\r\n           bytes" );
-	printf( "\r\n  destroy <fifo-name>" );
-	printf( "\r\n         - destroys the first-in, first-out (FIFO) data queue as" );
-	printf( "\r\n           specified by the name <fifo-name>" );
-	printf( "\r\n  enqueue <fifo-name> <fifo-item-data>" );
-	printf( "\r\n         - opens the first-in, first-out (FIFO) data queue called" );
-	printf( "\r\n           <fifo-name>, adds a FIFO item containing the string data" );
-	printf( "\r\n           specified in <fifo-item-data>, and closes the FIFO" );
-	printf( "\r\n  dequeue <fifo-name>" );
-	printf( "\r\n         - opens the first-in, first-out (FIFO) data queue called" );
-	printf( "\r\n           <fifo-name>, removes the oldest FIFO item, and closes the" );
-	printf( "\r\n           FIFO (the string data associated with the removed item is" );
-	printf( "\r\n           printed to the console)" );
-	printf( "\r\n  fetch <fifo-name> [<fifo-item-index]" );
-	printf( "\r\n         - opens the first-in, first-out (FIFO) data queue called" );
-	printf( "\r\n           <fifo-name>, reads either the oldest FIFO item or, if the" );
-	printf( "\r\n           optional <fifo-item-index> is indicated, the FIFO item as" );
-	printf( "\r\n           specified by <fifo-item-index>, and closes the FIFO (the" );
-	printf( "\r\n           string data associated with the read FIFO item is printed" );
-	printf( "\r\n           to the console)" );
-	printf( "\r\n  length <fifo-name>" );
-	printf( "\r\n         - opens the first-in, first-out (FIFO) data queue called" );
-	printf( "\r\n           <fifo-name>, reads the current length of the FIFO, and" );
-	printf( "\r\n           closes the FIFO (the read length is printed to the console)" );
-	printf( "\r\n" );
-	printf( "\r\nDataQ/>" );
+	SERIAL_PRINT( "\r\nCommand Line Interface (CLI) for TR M7 DataQ" );
+	SERIAL_PRINT( "\r\nCopyright 2018, Swift Labs" );
+	SERIAL_PRINT( "\r\n" );
+	SERIAL_PRINT( "\r\nAvailable Commands:" );
+	SERIAL_PRINT( "\r\n  create <fifo-name> <fifo-size> <fifo-item-size> <fifo-type>" );
+	SERIAL_PRINT( "\r\n         - creates a first-in, first-out (FIFO) data queue called" );
+	SERIAL_PRINT( "\r\n           <fifo-name> and can store up to maximum of <fifo-size>" );
+	SERIAL_PRINT( "\r\n           items with each fifo item has size of <fifo-item-size>" );
+	SERIAL_PRINT( "\r\n           bytes" );
+	SERIAL_PRINT( "\r\n  destroy <fifo-name>" );
+	SERIAL_PRINT( "\r\n         - destroys the first-in, first-out (FIFO) data queue as" );
+	SERIAL_PRINT( "\r\n           specified by the name <fifo-name>" );
+	SERIAL_PRINT( "\r\n  enqueue <fifo-name> <fifo-item-data>" );
+	SERIAL_PRINT( "\r\n         - opens the first-in, first-out (FIFO) data queue called" );
+	SERIAL_PRINT( "\r\n           <fifo-name>, adds a FIFO item containing the string data" );
+	SERIAL_PRINT( "\r\n           specified in <fifo-item-data>, and closes the FIFO" );
+	SERIAL_PRINT( "\r\n  dequeue <fifo-name>" );
+	SERIAL_PRINT( "\r\n         - opens the first-in, first-out (FIFO) data queue called" );
+	SERIAL_PRINT( "\r\n           <fifo-name>, removes the oldest FIFO item, and closes the" );
+	SERIAL_PRINT( "\r\n           FIFO (the string data associated with the removed item is" );
+	SERIAL_PRINT( "\r\n           printed to the console)" );
+	SERIAL_PRINT( "\r\n  fetch <fifo-name> [<fifo-item-index]" );
+	SERIAL_PRINT( "\r\n         - opens the first-in, first-out (FIFO) data queue called" );
+	SERIAL_PRINT( "\r\n           <fifo-name>, reads either the oldest FIFO item or, if the" );
+	SERIAL_PRINT( "\r\n           optional <fifo-item-index> is indicated, the FIFO item as" );
+	SERIAL_PRINT( "\r\n           specified by <fifo-item-index>, and closes the FIFO (the" );
+	SERIAL_PRINT( "\r\n           string data associated with the read FIFO item is printed" );
+	SERIAL_PRINT( "\r\n           to the console)" );
+	SERIAL_PRINT( "\r\n  length <fifo-name>" );
+	SERIAL_PRINT( "\r\n         - opens the first-in, first-out (FIFO) data queue called" );
+	SERIAL_PRINT( "\r\n           <fifo-name>, reads the current length of the FIFO, and" );
+	SERIAL_PRINT( "\r\n           closes the FIFO (the read length is printed to the console)" );
+	SERIAL_PRINT( "\r\n" );
+	SERIAL_PRINT( "\r\nDataQ/>" );
 
 	/* initiliaze the data queue engine */
 	DataQ_InitEngine();
@@ -460,7 +466,7 @@ int PSL_main( int argc, char * argv[] )
 				command_args_index = 0;
 
 				/* show the prompt back */
-				printf( "\r\nDataQ/>" );
+				SERIAL_PRINT( "\r\nDataQ/>" );
 
 				continue;
 			}

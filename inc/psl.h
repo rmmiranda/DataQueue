@@ -44,7 +44,7 @@
  *  @return none
  *
  */
-extern void * PSL_main ( int argc, char * argv[] );
+extern int PSL_main ( int argc, char * argv[] );
 
 
 /** @brief Fills a memory block with a specific byte value.
