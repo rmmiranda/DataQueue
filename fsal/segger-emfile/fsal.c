@@ -23,6 +23,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "SEGGER.h"
+#include "FS.h"
+
 static char current_working_dir[20] = {0};
 
 /** @brief Initializes the filesystem for use
@@ -40,8 +43,9 @@ void FSAL_Init( void )
 	/* initiliaze emFile filesystem */
 	FS_Init();
 
-	/* set current working directory to root */
-	snprintf( current_working_dir, sizeof(current_working_dir), "" );
+	/* set current working directory to "" */
+	//snprintf( current_working_dir, sizeof(current_working_dir), "" );
+	memset( current_working_dir, 0, sizeof(current_working_dir) );
 }
 
 /** @brief Creates a directory.
@@ -105,8 +109,9 @@ int FSAL_ChangeDirectory( char * dir_name )
 
 	if ( strcmp(dir_name, "../") == 0 ) {
 
-		snprintf( current_working_dir, sizeof(current_working_dir), "" );
-		current_working_dir[ strlen("") ] = '\0';
+		//snprintf( current_working_dir, sizeof(current_working_dir), "" );
+		//current_working_dir[ strlen("") ] = '\0';
+		memset( current_working_dir, 0, sizeof(current_working_dir) );
 
 	} else {
 
@@ -281,7 +286,7 @@ int FSAL_OpenFile( char * file_name, int flags, FSAL_File_t * fsal_handle )
 	}
 
 	/* copy the handle to the output parameter */
-	*fsal_handle = (FSAL_File_t) fd;
+	*fsal_handle = (FSAL_File_t)((intptr_t)fd);
 
 	return FSAL_STATUS_OK;
 }
@@ -303,7 +308,7 @@ int FSAL_OpenFile( char * file_name, int flags, FSAL_File_t * fsal_handle )
  */
 int FSAL_CloseFile( FSAL_File_t fsal_handle )
 {
-	FS_FILE * fd = (FS_FILE *) fsal_handle;
+	FS_FILE * fd = (FS_FILE *)((intptr_t)fsal_handle);
 
 	/* sanity check */
 	if ( fd == 0 ) {
@@ -335,7 +340,7 @@ int FSAL_CloseFile( FSAL_File_t fsal_handle )
  */
 size_t FSAL_ReadFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length )
 {
-	FS_FILE * fd = (FS_FILE *) fsal_handle;
+	FS_FILE * fd = (FS_FILE *)((intptr_t)fsal_handle);
 	size_t actual_length = 0;
 
 	/* sanity checks */
@@ -376,7 +381,7 @@ size_t FSAL_ReadFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length )
  */
 size_t FSAL_WriteFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length )
 {
-	FS_FILE * fd = (FS_FILE *) fsal_handle;
+	FS_FILE * fd = (FS_FILE *)((intptr_t)fsal_handle);
 	size_t actual_length = 0;
 
 	/* sanity checks */
@@ -386,7 +391,7 @@ size_t FSAL_WriteFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length 
 
 	/* proceed operation with nonzero length */
 	if ( length ) {
-		actual_length = FS_Write( buffer, 1, length, fd );
+		actual_length = FS_FWrite( buffer, 1, length, fd );
 		if ( (actual_length != length) &&
 			 (FS_FError(fd) != FS_ERR_OK) ) {
 
