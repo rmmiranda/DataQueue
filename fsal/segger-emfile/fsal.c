@@ -101,6 +101,7 @@ int FSAL_ChangeDirectory( char * dir_name )
 	FS_FIND_DATA fd;
 	char dir_path_name[20] = {0};
 	char file_name[20] = {0};
+	int fsal_status = FSAL_ERROR_DIR_ACCESS;
 
 	/* sanity checks */
 	if ( dir_name == NULL ) {
@@ -122,12 +123,13 @@ int FSAL_ChangeDirectory( char * dir_name )
 			snprintf( current_working_dir, sizeof(current_working_dir), "%s", dir_path_name );
 			current_working_dir[ strlen(dir_path_name) ] = '\0';
 
+			fsal_status = FSAL_STATUS_OK;
 		}
 
 		FS_FindClose( &fd );
 	}
 
-	return FSAL_STATUS_OK;
+	return fsal_status;
 }
 
 /** @brief Removes a directory.
