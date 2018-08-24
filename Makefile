@@ -8,7 +8,7 @@ AR  := $(PREFIX)-ar
 #
 # Compiler flags
 #
-FLAGS := -O3 -mthumb -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard
+FLAGS := -g -mthumb -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard
 
 #
 # Include directories
