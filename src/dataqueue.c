@@ -1272,7 +1272,7 @@ int DataQ_FifoGetEntry( DataQ_File_t * fifo_handle, void * data, size_t * size )
 
 	/* copy the LUT entry reference array and terminate to make it a string */
 	PSL_memcpy( fifo_lut_entry_reference, fifo_lut_entry.reference, DATA_QUEUE_LUT_ENTRY_SIZE);
-	fifo_lut_entry_reference[DATA_QUEUE_LUT_ENTRY_SIZE + 1] = '\0';
+	fifo_lut_entry_reference[DATA_QUEUE_LUT_ENTRY_SIZE] = '\0';
 
 	/* extract the data from the LUT entry as indicated by the reference */
 	if ( (FSAL_OpenFile(fifo_lut_entry_reference, FSAL_FLAGS_BINARY | FSAL_FLAGS_READ_ONLY, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
