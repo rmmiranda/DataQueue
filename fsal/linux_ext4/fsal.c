@@ -326,10 +326,10 @@ int FSAL_CloseFile( FSAL_File_t fsal_handle )
  *                error code if the operation failed
  *
  */
-size_t FSAL_ReadFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length )
+ssize_t FSAL_ReadFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length )
 {
 	int fd = (int) fsal_handle;
-	size_t actual_length = 0;
+	ssize_t actual_length = 0;
 
 	/* sanity checks */
 	if ( (fd == -1) || (buffer == NULL) ) {
@@ -364,10 +364,10 @@ size_t FSAL_ReadFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length )
  *                error code if the operation failed
  *
  */
-size_t FSAL_WriteFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length )
+ssize_t FSAL_WriteFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length )
 {
 	int fd = (int) fsal_handle;
-	size_t actual_length = 0;
+	ssize_t actual_length = 0;
 
 	/* sanity checks */
 	if ( (fd == -1) || (buffer == NULL) ) {

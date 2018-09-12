@@ -269,6 +269,14 @@ int FSAL_OpenFile( char * file_name, int flags, FSAL_File_t * fsal_handle )
 			return FSAL_ERROR_FILE_ACCESS;
 		}
 
+	} else if (flags & FSAL_FLAGS_APPEND_ONLY ) {
+
+		/* open the specified file for append only */
+		fd = FS_FOpen( file_path, "ab" );
+		if ( fd == 0 ) {
+			return FSAL_ERROR_FILE_ACCESS;
+		}
+
 	} else if (flags & FSAL_FLAGS_WRITE_ONLY ) {
 
 		/* open the specified file for writing only */
@@ -340,10 +348,10 @@ int FSAL_CloseFile( FSAL_File_t fsal_handle )
  *                error code if the operation failed
  *
  */
-size_t FSAL_ReadFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length )
+ssize_t FSAL_ReadFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length )
 {
 	FS_FILE * fd = (FS_FILE *)((intptr_t)fsal_handle);
-	size_t actual_length = 0;
+	ssize_t actual_length = 0;
 
 	/* sanity checks */
 	if ( (fd == 0) || (buffer == NULL) ) {
@@ -381,10 +389,10 @@ size_t FSAL_ReadFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length )
  *                error code if the operation failed
  *
  */
-size_t FSAL_WriteFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length )
+ssize_t FSAL_WriteFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length )
 {
 	FS_FILE * fd = (FS_FILE *)((intptr_t)fsal_handle);
-	size_t actual_length = 0;
+	ssize_t actual_length = 0;
 
 	/* sanity checks */
 	if ( (fd == 0) || (buffer == NULL) ) {

@@ -44,7 +44,8 @@
 #define FSAL_FLAGS_CREATE			0x00000001
 #define FSAL_FLAGS_READ_ONLY		0x00000010
 #define FSAL_FLAGS_WRITE_ONLY		0x00000020
-#define FSAL_FLAGS_READ_WRITE		0x00000040
+#define FSAL_FLAGS_APPEND_ONLY		0x00000040
+#define FSAL_FLAGS_READ_WRITE		0x00000080
 #define FSAL_FLAGS_BINARY			0x00000100
 
 /**
@@ -200,7 +201,7 @@ extern int FSAL_CloseFile( FSAL_File_t fsal_handle );
  *                error code if the operation failed
  *
  */
-extern size_t FSAL_ReadFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length );
+extern ssize_t FSAL_ReadFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length );
 
 
 /** @brief Writes to a file.
@@ -220,7 +221,7 @@ extern size_t FSAL_ReadFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t l
  *                error code if the operation failed
  *
  */
-extern size_t FSAL_WriteFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length );
+extern ssize_t FSAL_WriteFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length );
 
 /** @brief Deletes a file.
  *
