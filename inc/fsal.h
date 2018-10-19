@@ -131,11 +131,14 @@ extern int FSAL_RemoveDirectory( char * dir_name );
  */
 extern int FSAL_ListDirectory( char * dir_name );
 
-/** @brief Lists a file.
+/** @brief Lists a file and retrieves its size.
  *
- *  This function lists a file in the current directory.
+ *  This function lists a file in the current directory and
+ *  retrieves the file size.
  *
  *  @param[in] file_name - the name of the file to list
+ *
+ *  @param[out] file_size - the current size of the file
  *
  *  @return int - the status or error code of the operation after
  *                the call:
@@ -144,7 +147,7 @@ extern int FSAL_ListDirectory( char * dir_name );
  *                FSAL_ERROR_FILE_ACCESS
  *
  */
-extern int FSAL_ListFile( char * file_name );
+extern int FSAL_ListFile( char * file_name, size_t * file_size );
 
 /** @brief Opens a file.
  *

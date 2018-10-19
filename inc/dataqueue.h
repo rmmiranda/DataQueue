@@ -44,6 +44,7 @@
 #define CODE_ERROR_QUEUE_NOT_SEEKABLE       	13
 #define CODE_ERROR_FS_ACCESS_FAIL       		14
 #define CODE_ERROR_HANDLE_NOT_AVAIL       		15
+#define CODE_ERROR_QUEUE_ENTRY_NOT_LISTED  		16
 
 
 
@@ -104,7 +105,8 @@ typedef struct DataQ_File {
  * of a specific data queue
  */
 typedef struct DataQ_Hdr {
-	size_t size;
+	size_t flash_size;
+	size_t max_flash_size;
 	size_t max_entry_size;
 	uint8_t max_entries;
 	uint8_t num_of_entries;
@@ -156,6 +158,9 @@ void DataQ_InitEngine( void );
  *  @param[in] max_entry_size - the maximum allowable size of one
  *                              data queue entry
  *
+ *  @param[in] max_flash_size - the maximum allowable flash size for
+ *                              the data queue to be created
+ *
  *  @param[in] flags - the bit mask information of the characteristics
  *                     specific to the data queue:
  *
@@ -171,7 +176,7 @@ void DataQ_InitEngine( void );
  *                CODE_ERROR_FS_ACCESS_FAIL
  *
  */
-int DataQ_FifoCreate( char * fifo_name, uint8_t max_entries, size_t max_entry_size, uint16_t flags );
+int DataQ_FifoCreate( char * fifo_name, uint8_t max_entries, size_t max_entry_size, size_t max_flash_size, uint16_t flags );
 
 
 /** @brief Destroys a first-in, first-out (FIFO) data queue.
@@ -474,6 +479,33 @@ int DataQ_FifoGetEntry( DataQ_File_t * fifo_handle, void * data, size_t * size )
  *
  */
 int DataQ_FifoGetLength( DataQ_File_t * fifo_handle, size_t * length );
+
+/** @brief Retrieves the current flash size usage of the specified
+ *         first-in, first-out (FIFO) data queue.
+ *
+ *  This function gets the current size in flash storage of the
+ *  specified data queue. If the operation succeeds, the flash size
+ *  in bytes is stored in the output parameter.
+ *
+ *
+ *  @param[in] fifo_handle - the reference of the data queue to be
+ *                           accessed for the get length operation.
+ *
+ *  @param[out] flash_size - the reference where the flash size used
+ *                           is to be stored.
+ *
+ *  @return int - the status or error code of the operation after
+ *                the call:
+ *
+ *                CODE_STATUS_OK
+ *                CODE_ERROR_INVALID_ARG
+ *                CODE_ERROR_INVALID_HANDLE
+ *                CODE_ERROR_QUEUE_MISSING
+ *                CODE_ERROR_QUEUE_CLOSED
+ *                CODE_ERROR_FS_ACCESS_FAIL
+ *
+ */
+int DataQ_FifoGetSize( DataQ_File_t * fifo_handle, size_t * flash_size );
 
 #endif /* __DATA_QUEUE_H__ */
 

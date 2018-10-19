@@ -185,11 +185,14 @@ int FSAL_ListDirectory( char * dir_name )
 	return FSAL_ERROR_DIR_ACCESS;
 }
 
-/** @brief Lists a file.
+/** @brief Lists a file and retrieves its size.
  *
- *  This function lists a file in the current directory.
+ *  This function lists a file in the current directory and
+ *  retrieves the file size.
  *
  *  @param[in] file_name - the name of the file to list
+ *
+ *  @param[out] file_size - the current size of the file
  *
  *  @return int - the status or error code of the operation after
  *                the call:
@@ -198,7 +201,7 @@ int FSAL_ListDirectory( char * dir_name )
  *                FSAL_ERROR_FILE_ACCESS
  *
  */
-int FSAL_ListFile( char * file_name )
+int FSAL_ListFile( char * file_name, size_t * file_size )
 {
 	FS_FILE * fd;
 	char file_path[20] = {0};
@@ -216,8 +219,16 @@ int FSAL_ListFile( char * file_name )
 		return FSAL_ERROR_FILE_ACCESS;
 	}
 
+	/* retrieve the file size */
+	*file_size = FS_GetFileSize( fd );
+
 	/* close the file */
 	FS_FClose( fd );
+
+	/* check for error condition */
+	if ( *file_size == 0xFFFFFFFF ) {
+		return FSAL_ERROR_FILE_ACCESS;
+	}
 
 	return FSAL_STATUS_OK;
 }

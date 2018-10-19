@@ -58,6 +58,9 @@ void DataQ_InitEngine( void )
  *  @param[in] max_entry_size - the maximum allowable size of one
  *                              data queue entry
  *
+ *  @param[in] max_flash_size - the maximum allowable flash size for
+ *                              the data queue to be created
+ *
  *  @param[in] flags - the bit mask information of the characteristics
  *                     specific to the data queue:
  *
@@ -73,10 +76,11 @@ void DataQ_InitEngine( void )
  *                CODE_ERROR_FS_ACCESS_FAIL
  *
  */
-int DataQ_FifoCreate( char * fifo_name, uint8_t max_entries, size_t max_entry_size, uint16_t flags )
+int DataQ_FifoCreate( char * fifo_name, uint8_t max_entries, size_t max_entry_size, size_t max_flash_size, uint16_t flags )
 {
 	DataQ_Hdr_t fifo_hdr = {
-		.size = 0,
+		.flash_size = 0,
+		.max_flash_size = max_flash_size,
 		.max_entry_size = max_entry_size,
 		.max_entries = max_entries,
 		.num_of_entries = 0,
@@ -96,9 +100,24 @@ int DataQ_FifoCreate( char * fifo_name, uint8_t max_entries, size_t max_entry_si
 		return CODE_ERROR_INVALID_ARG;
 	}
 
-	/* check mandatory arguments for invalid values */
-	if ( ( max_entries == 0 ) || ( max_entry_size == 0 ) ) {
+	/* check mandatory arguments for invalid values:
+	 *  - at least max_entries or max_flash_size must
+	 *    indicate the maximum size of the data queue
+	 *  - max_entry_size must be set
+	 */
+	if ( ((max_entries == 0) && (max_flash_size == 0)) ||
+		 ( max_entry_size == 0 )  ) {
 		return CODE_ERROR_INVALID_ARG;
+	}
+
+	/* adjust maximum entries if not specified */
+	if ( fifo_hdr.max_entries == 0 ) {
+		fifo_hdr.max_entries = 0xFF;
+	}
+
+	/* adjust maximum flash size if not specified */
+	if ( fifo_hdr.max_flash_size == 0 ) {
+		fifo_hdr.max_flash_size = fifo_hdr.max_entries * max_entry_size;
 	}
 
 	/* check if data queue already exists */
@@ -195,6 +214,7 @@ int DataQ_FifoCreate( char * fifo_name, uint8_t max_entries, size_t max_entry_si
  */
 int DataQ_FifoDestroy( char * fifo_name )
 {
+	size_t file_size;
 	int index;
 
 	/* check mandatory arguments for NULL pointers */
@@ -222,9 +242,9 @@ int DataQ_FifoDestroy( char * fifo_name )
 	}
 
 	/* check if fifo is opened by another process by listing lock files */
-	if ( (FSAL_ListFile( ".rolock" ) == FSAL_STATUS_OK) ||
-	     (FSAL_ListFile( ".wolock" ) == FSAL_STATUS_OK) ||
-		 (FSAL_ListFile( ".rwlock" ) == FSAL_STATUS_OK) ) {
+	if ( (FSAL_ListFile( ".rolock", &file_size ) == FSAL_STATUS_OK) ||
+	     (FSAL_ListFile( ".wolock", &file_size ) == FSAL_STATUS_OK) ||
+		 (FSAL_ListFile( ".rwlock", &file_size ) == FSAL_STATUS_OK) ) {
 
 		/* fifo is still opened by another and maybe busy */
 		FSAL_ChangeDirectory( "../" );
@@ -310,6 +330,7 @@ int DataQ_FifoDestroy( char * fifo_name )
 int DataQ_FifoOpen( char * fifo_name, int access, int mode, DataQ_File_t ** fifo_handle )
 {
 	FSAL_File_t fsal_handle = -1;
+	size_t file_size;
 	int fsal_flags = FSAL_FLAGS_BINARY | FSAL_FLAGS_READ_WRITE;
 	int fsal_status = FSAL_ERROR_FILE_ACCESS;
 	uint8_t users = 1;
@@ -354,14 +375,14 @@ int DataQ_FifoOpen( char * fifo_name, int access, int mode, DataQ_File_t ** fifo
 	}
 
 	/* check if fifo is already opened by another process by listing lock files */
-	if ( (FSAL_ListFile( ".wolock" ) == FSAL_STATUS_OK) ||
-		 (FSAL_ListFile( ".rwlock" ) == FSAL_STATUS_OK) ) {
+	if ( (FSAL_ListFile( ".wolock", &file_size ) == FSAL_STATUS_OK) ||
+		 (FSAL_ListFile( ".rwlock", &file_size ) == FSAL_STATUS_OK) ) {
 
 		/* fifo is already opened by another process with at least write access */
 		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_QUEUE_IS_BUSY;
 
-	} else if ( (FSAL_ListFile( ".rolock" ) == FSAL_STATUS_OK) &&
+	} else if ( (FSAL_ListFile( ".rolock", &file_size ) == FSAL_STATUS_OK) &&
 			    (access != ACCESS_TYPE_READ_ONLY) ) {
 
 		/**
@@ -377,7 +398,7 @@ int DataQ_FifoOpen( char * fifo_name, int access, int mode, DataQ_File_t ** fifo
 	if ( access == ACCESS_TYPE_READ_ONLY ) {
 
 		/* determine if another process is currently using the data queue */
-		if ( FSAL_ListFile( ".rolock" ) == FSAL_ERROR_FILE_ACCESS ) {
+		if ( FSAL_ListFile( ".rolock", &file_size ) == FSAL_ERROR_FILE_ACCESS ) {
 
 			/* this process is first user so create the lock file */
 			if ( FSAL_OpenFile(".rolock", fsal_flags | FSAL_FLAGS_CREATE, &fsal_handle) == FSAL_STATUS_OK ) {
@@ -498,6 +519,7 @@ int DataQ_FifoOpen( char * fifo_name, int access, int mode, DataQ_File_t ** fifo
 int DataQ_FifoClose( DataQ_File_t * fifo_handle )
 {
 	FSAL_File_t fsal_handle = -1;
+	size_t file_size;
 	int fsal_flags = FSAL_FLAGS_BINARY | FSAL_FLAGS_READ_WRITE;
 	int fsal_status = FSAL_STATUS_OK;
 	uint8_t users;
@@ -545,14 +567,14 @@ int DataQ_FifoClose( DataQ_File_t * fifo_handle )
 			}
 
 			/* locate the write-only lock file associated with the data queue */
-			if ( FSAL_ListFile( ".wolock" ) == FSAL_STATUS_OK ) {
+			if ( FSAL_ListFile( ".wolock", &file_size ) == FSAL_STATUS_OK ) {
 
 				/* delete the lock file (only one user allowed) */
 				fsal_status = FSAL_DeleteFile( ".wolock" );
 			}
 
 			/* locate the read/write lock file associated with the data queue */
-			if ( FSAL_ListFile( ".rwlock" ) == FSAL_STATUS_OK ) {
+			if ( FSAL_ListFile( ".rwlock", &file_size ) == FSAL_STATUS_OK ) {
 
 				/* delete the lock file (only one user allowed) */
 				fsal_status = FSAL_DeleteFile( ".rwlock" );
@@ -606,11 +628,13 @@ int DataQ_FifoClose( DataQ_File_t * fifo_handle )
  *                CODE_ERROR_QUEUE_MISSING
  *                CODE_ERROR_QUEUE_CLOSED
  *                CODE_ERROR_FS_ACCESS_FAIL
+ *                CODE_ERROR_QUEUE_ENTRY_NOT_LISTED
  *
  */
 int DataQ_FifoEnqueue( DataQ_File_t * fifo_handle, void * data, size_t size )
 {
 	FSAL_File_t fsal_handle = -1;
+	size_t file_size;
 	DataQ_Hdr_t fifo_hdr;
 	DataQ_LUT_Entry_t fifo_lut_entry;
 	uint8_t fifo_lut_cache[ DATAQ_LUT_FILE_SIZE_MAX ] = { 0 };
@@ -660,8 +684,8 @@ int DataQ_FifoEnqueue( DataQ_File_t * fifo_handle, void * data, size_t size )
 	}
 
 	/* check if fifo is already opened for writing */
-	if ( (FSAL_ListFile( ".wolock" ) == FSAL_ERROR_FILE_ACCESS) &&
-		 (FSAL_ListFile( ".rwlock" ) == FSAL_ERROR_FILE_ACCESS) ) {
+	if ( (FSAL_ListFile( ".wolock", &file_size ) == FSAL_ERROR_FILE_ACCESS) &&
+		 (FSAL_ListFile( ".rwlock", &file_size ) == FSAL_ERROR_FILE_ACCESS) ) {
 		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_QUEUE_CLOSED;
 	}
@@ -676,6 +700,16 @@ int DataQ_FifoEnqueue( DataQ_File_t * fifo_handle, void * data, size_t size )
 			FSAL_CloseFile( fsal_handle );
 		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_FS_ACCESS_FAIL;
+	}
+
+	/* validate the entry size of the data to be enqueued */
+	if ( size > fifo_hdr.max_entry_size ) {
+
+		/* data size is bigger that what is allowed */
+		if ( fsal_handle != -1 )
+			FSAL_CloseFile( fsal_handle );
+		FSAL_ChangeDirectory( "../" );
+		return CODE_ERROR_INVALID_ARG;
 	}
 
 	/* create a cache which directly mirrors the LUT file associated with the fifo */
@@ -714,6 +748,49 @@ int DataQ_FifoEnqueue( DataQ_File_t * fifo_handle, void * data, size_t size )
 		return CODE_ERROR_FS_ACCESS_FAIL;
 	}
 
+	/* determine if fifo is already maxed out in terms either of
+	 * the number of entries allowed or the flash size allowed
+	 */
+	while ( (fifo_hdr.num_of_entries == fifo_hdr.max_entries) ||
+			((fifo_hdr.flash_size + size) > fifo_hdr.max_flash_size) ) {
+
+		/* adjust seek offset if seek is set to the head end of the data queue
+		 * (wrapping around if the seek reach the end of the queue) */
+		if ( fifo_hdr.seek_lut_offs == fifo_hdr.head_lut_offs ) {
+			fifo_hdr.seek_lut_offs = (fifo_hdr.seek_lut_offs + 1) % fifo_hdr.max_entries;
+		}
+
+		/* copy the LUT entry reference array and terminate to make it a string */
+		PSL_memcpy( fifo_lut_entry_reference, fifo_lut_cache + (fifo_hdr.head_lut_offs * sizeof(DataQ_LUT_Entry_t)), DATA_QUEUE_LUT_ENTRY_SIZE);
+		fifo_lut_entry_reference[DATA_QUEUE_LUT_ENTRY_SIZE] = '\0';
+
+    	/* retrieve the flash size of the current head */
+    	if ( FSAL_ListFile( fifo_lut_entry_reference, &file_size ) == FSAL_ERROR_FILE_ACCESS ) {
+
+    		/* file system access error */
+    		if ( fsal_handle != -1 )
+    			FSAL_CloseFile( fsal_handle );
+    		FSAL_ChangeDirectory( "../" );
+    		return CODE_ERROR_QUEUE_ENTRY_NOT_LISTED;
+    	}
+
+		/* delete the file */
+		FSAL_DeleteFile( fifo_lut_entry_reference );
+
+		/* remove the oldest entry by invalidating the LUT entry indicated by the
+		 * head offset and then incrementing the head offset (wrapping around if the
+		 * the head reach the end of the queue)
+		 */
+		PSL_memset( fifo_lut_cache + (fifo_hdr.head_lut_offs * sizeof(DataQ_LUT_Entry_t)), 0, sizeof(DataQ_LUT_Entry_t) );
+		fifo_hdr.head_lut_offs = (fifo_hdr.head_lut_offs + 1) % fifo_hdr.max_entries;
+
+		/* decrement entry counter */
+		fifo_hdr.num_of_entries--;
+
+		/* decrement flash size */
+		fifo_hdr.flash_size -= file_size;
+	}
+
 	/* determine if fifo is empty */
 	if ( (fifo_hdr.num_of_entries == 0) &&
 		 (fifo_hdr.head_lut_offs == fifo_hdr.tail_lut_offs)  ) {
@@ -724,30 +801,8 @@ int DataQ_FifoEnqueue( DataQ_File_t * fifo_handle, void * data, size_t size )
 		/* increment entry counter */
 		fifo_hdr.num_of_entries++;
 
-	/* determine if fifo is already full */
-    } else if ( (fifo_hdr.num_of_entries == fifo_hdr.max_entries) &&
-   		        (((fifo_hdr.head_lut_offs == 0) && (fifo_hdr.tail_lut_offs == (fifo_hdr.max_entries - 1))) ||
-		         ((fifo_hdr.head_lut_offs > 0) && (fifo_hdr.tail_lut_offs == (fifo_hdr.head_lut_offs - 1)))) ) {
-
-		/* adjust seek offset if seek is set to the head end of the data queue
-		 * (wrapping around if the seek reach the end of the queue) */
-		if ( fifo_hdr.seek_lut_offs == fifo_hdr.head_lut_offs ) {
-			fifo_hdr.seek_lut_offs = (fifo_hdr.seek_lut_offs + 1) % fifo_hdr.max_entries;
-		}
-
-		/* remove the oldest entry by invalidating the LUT entry indicated by the
-		 * head offset and then incrementing the head offset (wrapping around if
-		 * the head reach the end of the queue)
-		 */
-		PSL_memset( fifo_lut_cache + (fifo_hdr.head_lut_offs * sizeof(DataQ_LUT_Entry_t)), 0, sizeof(DataQ_LUT_Entry_t) );
-		fifo_hdr.head_lut_offs = (fifo_hdr.head_lut_offs + 1) % fifo_hdr.max_entries;
-
-		/* add the new entry by incrementing the tail offset (wrapping around if the
-		 * tail reach the end of the queue) and copying the LUT entry indicated by
-		 * the new tail offset
-		 */
-		fifo_hdr.tail_lut_offs = (fifo_hdr.tail_lut_offs + 1) % fifo_hdr.max_entries;
-		PSL_memcpy( fifo_lut_cache + (fifo_hdr.tail_lut_offs * sizeof(DataQ_LUT_Entry_t)), &fifo_lut_entry, sizeof(DataQ_LUT_Entry_t) );
+		/* increment flash size */
+		fifo_hdr.flash_size += size;
 
 	} else {
 
@@ -760,6 +815,9 @@ int DataQ_FifoEnqueue( DataQ_File_t * fifo_handle, void * data, size_t size )
 
 		/* increment entry counter */
 		fifo_hdr.num_of_entries++;
+
+		/* increment flash size */
+		fifo_hdr.flash_size += size;
 	}
 
 	/* update the LUT file associated with the fifo */
@@ -831,6 +889,7 @@ int DataQ_FifoEnqueue( DataQ_File_t * fifo_handle, void * data, size_t size )
 int DataQ_FifoDequeue( DataQ_File_t * fifo_handle, void * data, size_t * size )
 {
 	FSAL_File_t fsal_handle = -1;
+	size_t file_size;
 	DataQ_Hdr_t fifo_hdr;
 	uint8_t fifo_lut_cache[ DATAQ_LUT_FILE_SIZE_MAX ] = { 0 };
 	char fifo_lut_entry_reference[DATA_QUEUE_LUT_ENTRY_SIZE + 1];
@@ -874,8 +933,8 @@ int DataQ_FifoDequeue( DataQ_File_t * fifo_handle, void * data, size_t * size )
 	}
 
 	/* check if fifo is already opened for writing */
-	if ( (FSAL_ListFile( ".wolock" ) == FSAL_ERROR_FILE_ACCESS) &&
-		 (FSAL_ListFile( ".rwlock" ) == FSAL_ERROR_FILE_ACCESS) ) {
+	if ( (FSAL_ListFile( ".wolock", &file_size ) == FSAL_ERROR_FILE_ACCESS) &&
+		 (FSAL_ListFile( ".rwlock", &file_size ) == FSAL_ERROR_FILE_ACCESS) ) {
 		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_QUEUE_CLOSED;
 	}
@@ -925,7 +984,8 @@ int DataQ_FifoDequeue( DataQ_File_t * fifo_handle, void * data, size_t * size )
 		fifo_lut_entry_reference[DATA_QUEUE_LUT_ENTRY_SIZE] = '\0';
 
 		/* copy the dequeued data and store it if possible */
-		if ( (FSAL_OpenFile(fifo_lut_entry_reference, FSAL_FLAGS_BINARY | FSAL_FLAGS_READ_ONLY, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
+		if ( (FSAL_ListFile( fifo_lut_entry_reference, &file_size ) == FSAL_ERROR_FILE_ACCESS) ||
+			 (FSAL_OpenFile(fifo_lut_entry_reference, FSAL_FLAGS_BINARY | FSAL_FLAGS_READ_ONLY, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
 			 (*size = FSAL_ReadFile(fsal_handle, (uint8_t *)data, *size) < 0) ||
 			 (FSAL_CloseFile(fsal_handle) == FSAL_ERROR_FILE_ACCESS) ) {
 
@@ -948,6 +1008,9 @@ int DataQ_FifoDequeue( DataQ_File_t * fifo_handle, void * data, size_t * size )
 
 		/* decrement entry counter */
 		fifo_hdr.num_of_entries--;
+
+		/* decrement flash size */
+		fifo_hdr.flash_size -= file_size;
 	}
 
 	/* update the LUT file associated with the fifo */
@@ -1023,6 +1086,7 @@ int DataQ_FifoDequeue( DataQ_File_t * fifo_handle, void * data, size_t * size )
 int DataQ_FifoSeek( DataQ_File_t * fifo_handle, int seek_type, int position )
 {
 	FSAL_File_t fsal_handle = -1;
+	size_t file_size;
 	DataQ_Hdr_t fifo_hdr;
 	int index;
 
@@ -1068,8 +1132,8 @@ int DataQ_FifoSeek( DataQ_File_t * fifo_handle, int seek_type, int position )
 	}
 
 	/* check if fifo is already opened for reading */
-	if ( (FSAL_ListFile( ".rolock" ) == FSAL_ERROR_FILE_ACCESS) &&
-		 (FSAL_ListFile( ".rwlock" ) == FSAL_ERROR_FILE_ACCESS) ) {
+	if ( (FSAL_ListFile( ".rolock", &file_size ) == FSAL_ERROR_FILE_ACCESS) &&
+		 (FSAL_ListFile( ".rwlock", &file_size ) == FSAL_ERROR_FILE_ACCESS) ) {
 		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_QUEUE_CLOSED;
 	}
@@ -1182,6 +1246,7 @@ int DataQ_FifoSeek( DataQ_File_t * fifo_handle, int seek_type, int position )
 int DataQ_FifoGetEntry( DataQ_File_t * fifo_handle, void * data, size_t * size )
 {
 	FSAL_File_t fsal_handle = -1;
+	size_t file_size;
 	DataQ_Hdr_t fifo_hdr;
 	DataQ_LUT_Entry_t fifo_lut_entry;
 	uint8_t fifo_lut_cache[ DATAQ_LUT_FILE_SIZE_MAX ] = { 0 };
@@ -1225,8 +1290,8 @@ int DataQ_FifoGetEntry( DataQ_File_t * fifo_handle, void * data, size_t * size )
 	}
 
 	/* check if fifo is already opened for reading */
-	if ( (FSAL_ListFile( ".rolock" ) == FSAL_ERROR_FILE_ACCESS) &&
-		 (FSAL_ListFile( ".rwlock" ) == FSAL_ERROR_FILE_ACCESS) ) {
+	if ( (FSAL_ListFile( ".rolock", &file_size ) == FSAL_ERROR_FILE_ACCESS) &&
+		 (FSAL_ListFile( ".rwlock", &file_size ) == FSAL_ERROR_FILE_ACCESS) ) {
 		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_QUEUE_CLOSED;
 	}
@@ -1337,6 +1402,7 @@ int DataQ_FifoGetEntry( DataQ_File_t * fifo_handle, void * data, size_t * size )
 int DataQ_FifoGetLength( DataQ_File_t * fifo_handle, size_t * length )
 {
 	FSAL_File_t fsal_handle = -1;
+	size_t file_size;
 	DataQ_Hdr_t fifo_hdr;
 	int index;
 
@@ -1372,9 +1438,9 @@ int DataQ_FifoGetLength( DataQ_File_t * fifo_handle, size_t * length )
 	}
 
 	/* check if fifo is already opened */
-	if ( (FSAL_ListFile( ".rolock" ) == FSAL_ERROR_FILE_ACCESS) &&
-	     (FSAL_ListFile( ".wolock" ) == FSAL_ERROR_FILE_ACCESS) &&
-		 (FSAL_ListFile( ".rwlock" ) == FSAL_ERROR_FILE_ACCESS) ) {
+	if ( (FSAL_ListFile( ".rolock", &file_size ) == FSAL_ERROR_FILE_ACCESS) &&
+	     (FSAL_ListFile( ".wolock", &file_size ) == FSAL_ERROR_FILE_ACCESS) &&
+		 (FSAL_ListFile( ".rwlock", &file_size ) == FSAL_ERROR_FILE_ACCESS) ) {
 		FSAL_ChangeDirectory( "../" );
 		return CODE_ERROR_QUEUE_CLOSED;
 	}
@@ -1393,6 +1459,98 @@ int DataQ_FifoGetLength( DataQ_File_t * fifo_handle, size_t * length )
 
 	/* copy the current number of fifo entries */
 	*length = fifo_hdr.num_of_entries;
+
+	/* operation succeeded */
+	FSAL_ChangeDirectory( "../" );
+	return CODE_STATUS_OK;
+}
+
+
+/** @brief Retrieves the current flash size usage of the specified
+ *         first-in, first-out (FIFO) data queue.
+ *
+ *  This function gets the current size in flash storage of the
+ *  specified data queue. If the operation succeeds, the flash size
+ *  in bytes is stored in the output parameter.
+ *
+ *
+ *  @param[in] fifo_handle - the reference of the data queue to be
+ *                           accessed for the get length operation.
+ *
+ *  @param[out] flash_size - the reference where the flash size used
+ *                           is to be stored.
+ *
+ *  @return int - the status or error code of the operation after
+ *                the call:
+ *
+ *                CODE_STATUS_OK
+ *                CODE_ERROR_INVALID_ARG
+ *                CODE_ERROR_INVALID_HANDLE
+ *                CODE_ERROR_QUEUE_MISSING
+ *                CODE_ERROR_QUEUE_CLOSED
+ *                CODE_ERROR_FS_ACCESS_FAIL
+ *
+ */
+int DataQ_FifoGetSize( DataQ_File_t * fifo_handle, size_t * flash_size )
+{
+	FSAL_File_t fsal_handle = -1;
+	size_t file_size;
+	DataQ_Hdr_t fifo_hdr;
+	int index;
+
+	/* check mandatory arguments for NULL pointers */
+	if ( ( fifo_handle == (DataQ_File_t *) 0 ) || ( flash_size == (size_t *) 0 ) ) {
+		return CODE_ERROR_INVALID_ARG;
+	}
+
+	/* check for a valid fifo handle */
+	for ( index = 0; index < DATA_QUEUE_FILE_HANDLE_LIST_MAX + 1; index++ ) {
+
+		/* locate the fifo handle in the currently opened queue list */
+		if ( index < DATA_QUEUE_FILE_HANDLE_LIST_MAX ) {
+
+			/* a valid fifo handle references one data queue on the list */
+			if( fifo_handle == &DataQ_FileHandleList[index] ) {
+
+				/* found it */
+				break;
+			}
+
+			/* try next one */
+			continue;
+		}
+
+		/* can not find the handle */
+		return CODE_ERROR_INVALID_HANDLE;
+	}
+
+	/* check if folder associated with data queue is present by changing directory */
+	if ( FSAL_ChangeDirectory( fifo_handle->name ) == FSAL_ERROR_DIR_ACCESS ) {
+		return CODE_ERROR_QUEUE_MISSING;
+	}
+
+	/* check if fifo is already opened */
+	if ( (FSAL_ListFile( ".rolock", &file_size ) == FSAL_ERROR_FILE_ACCESS) &&
+	     (FSAL_ListFile( ".wolock", &file_size ) == FSAL_ERROR_FILE_ACCESS) &&
+		 (FSAL_ListFile( ".rwlock", &file_size ) == FSAL_ERROR_FILE_ACCESS) ) {
+		FSAL_ChangeDirectory( "../" );
+		return CODE_ERROR_QUEUE_CLOSED;
+	}
+
+	/* open and read the header (or metadata) file associated with the fifo */
+	if ( (FSAL_OpenFile(".header", FSAL_FLAGS_BINARY | FSAL_FLAGS_READ_ONLY, &fsal_handle) == FSAL_ERROR_FILE_ACCESS) ||
+		 (FSAL_ReadFile(fsal_handle, (uint8_t *)&fifo_hdr, sizeof(fifo_hdr)) < 0) ||
+		 (FSAL_CloseFile(fsal_handle) == FSAL_ERROR_FILE_ACCESS) ) {
+
+		/* file system access error */
+		if ( fsal_handle != -1 )
+			FSAL_CloseFile( fsal_handle );
+		FSAL_ChangeDirectory( "../" );
+		return CODE_ERROR_FS_ACCESS_FAIL;
+	}
+
+	/* copy the current number of fifo entries */
+	*flash_size = fifo_hdr.flash_size;
 
 	/* operation succeeded */
 	FSAL_ChangeDirectory( "../" );

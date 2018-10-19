@@ -32,6 +32,10 @@
 #define ASCII_CODE_ESC						0x1B
 #define ASCII_CODE_DEL						0x7F
 
+#ifdef FSAL_LINUX_EXT4
+#define SERIAL_CONSOLE
+#endif
+
 #ifdef SERIAL_CONSOLE
 #define SERIAL_PRINT(fmt, ...)	printf(fmt, ##__VA_ARGS__)
 #else
@@ -44,6 +48,7 @@ void DataQ_Enqueue_CLI( int argc, char * argv[] );
 void DataQ_Dequeue_CLI( int argc, char * argv[] );
 void DataQ_Fetch_CLI( int argc, char * argv[] );
 void DataQ_Length_CLI( int argc, char * argv[] );
+void DataQ_Size_CLI( int argc, char * argv[] );
 
 typedef enum {
 	DATAQ_CMD_CREATE,
@@ -52,6 +57,7 @@ typedef enum {
 	DATAQ_CMD_DEQUEUE,
 	DATAQ_CMD_FETCH,
 	DATAQ_CMD_LENGTH,
+	DATAQ_CMD_SIZE,
 	DATAQ_CMD_MAX,
 } DataQCmdId;
 
@@ -69,6 +75,7 @@ static DataQCmd_t command_list[DATAQ_CMD_MAX] = {
 	{ "dequeue", DataQ_Dequeue_CLI },
 	{ "fetch",   DataQ_Fetch_CLI   },
 	{ "length",  DataQ_Length_CLI  },
+	{ "size",    DataQ_Size_CLI  },
 };
 
 #ifdef SERIAL_CONSOLE
@@ -82,16 +89,17 @@ void DataQ_Create_CLI( int argc, char * argv[] )
 	char * fifo_name;
 	size_t fifo_size;
 	size_t fifo_item_size;
+	size_t fifo_max_flash_size;
 	//char * fifo_type;
 	int dataq_status;
 
-	if ( argc < 4 ) {
+	if ( argc < 5 ) {
 		SERIAL_PRINT( "Usage:" );
-		SERIAL_PRINT( "\r\ncreate <fifo-name> <fifo-size> <fifo-item-size>" );
+		SERIAL_PRINT( "\r\ncreate <fifo-name> <fifo-size> <fifo-item-size> <fifo-max-flash-size>" );
 		SERIAL_PRINT( "\r\n - creates a first-in, first-out (FIFO) data queue called" );
-		SERIAL_PRINT( "\r\n   <fifo-name> and can store up to maximum of <fifo-size>" );
+		SERIAL_PRINT( "\r\n   <fifo-name> and can store up to maximum of either <fifo-size>" );
 		SERIAL_PRINT( "\r\n   items with each fifo item has size of <fifo-item-size>" );
-		SERIAL_PRINT( "\r\n   bytes" );
+		SERIAL_PRINT( "\r\n   bytes, or <fifo-max-flash-size>" );
 
 		return;
 	}
@@ -100,8 +108,9 @@ void DataQ_Create_CLI( int argc, char * argv[] )
 	fifo_name = argv[1];
 	fifo_size = (size_t) atoi( argv[2] );
 	fifo_item_size =(size_t) atoi( argv[3] );
+	fifo_max_flash_size =(size_t) atoi( argv[4] );
 
-	dataq_status = DataQ_FifoCreate( fifo_name, fifo_size, fifo_item_size, FLAGS_RANDOM_ACCESS );
+	dataq_status = DataQ_FifoCreate( fifo_name, fifo_size, fifo_item_size, fifo_max_flash_size, FLAGS_RANDOM_ACCESS );
 	if ( dataq_status == CODE_STATUS_OK ) {
 		SERIAL_PRINT( "Operation succeeded" );
 	} else {
@@ -363,6 +372,57 @@ void DataQ_Length_CLI( int argc, char * argv[] )
 	return;
 }
 
+void DataQ_Size_CLI( int argc, char * argv[] )
+{
+	char * fifo_name;
+	DataQ_File_t * fifo_handle;
+	int dataq_status;
+	size_t fifo_size;
+
+	if ( argc < 2 ) {
+		SERIAL_PRINT( "Usage:" );
+		SERIAL_PRINT( "\r\nsize <fifo-name>" );
+		SERIAL_PRINT( "\r\n - opens the first-in, first-out (FIFO) data queue called" );
+		SERIAL_PRINT( "\r\n   <fifo-name>, reads the current flash size of the FIFO, and" );
+		SERIAL_PRINT( "\r\n   closes the FIFO (the flash size is printed to the console)" );
+
+		return;
+	}
+
+	/* get handles to the arguments */
+	fifo_name = argv[1];
+
+	dataq_status = DataQ_FifoOpen(
+						fifo_name,
+						ACCESS_TYPE_READ_ONLY,
+						ACCESS_MODE_BINARY_PACKED,
+						&fifo_handle );
+
+	if ( dataq_status == CODE_STATUS_OK ) {
+
+		SERIAL_PRINT( "Open operation succeeded\n" );
+
+		dataq_status = DataQ_FifoGetSize( fifo_handle, &fifo_size );
+		if ( dataq_status == CODE_STATUS_OK ) {
+			SERIAL_PRINT( "Get size operation succeeded (flash size = %d bytes)\n", (int)fifo_size );
+		} else {
+			SERIAL_PRINT( "Get size operation failed (error code = %d)\n", dataq_status );
+		}
+
+		dataq_status = DataQ_FifoClose( fifo_handle );
+		if ( dataq_status == CODE_STATUS_OK ) {
+			SERIAL_PRINT( "Close operation succeeded" );
+		} else {
+			SERIAL_PRINT( "Close operation failed (error code = %d)\n", dataq_status );
+		}
+
+	} else {
+		SERIAL_PRINT( "Open operation failed (error code = %d)", dataq_status );
+	}
+
+	return;
+}
+
 /** @brief The main application routine.
  *
  *  This function implements the main application routine as a command
@@ -376,7 +436,11 @@ void DataQ_Length_CLI( int argc, char * argv[] )
  *  @return int - the exit status code of the application
  *
  */
+#ifdef FSAL_LINUX_EXT4
+int main( int argc, char * argv[] )
+#else
 int PSL_main( int argc, char * argv[] )
+#endif
 {
 	char * command_args[10];
 	unsigned char command_args_index;
@@ -387,11 +451,11 @@ int PSL_main( int argc, char * argv[] )
 	SERIAL_PRINT( "\r\nCopyright 2018, Swift Labs" );
 	SERIAL_PRINT( "\r\n" );
 	SERIAL_PRINT( "\r\nAvailable Commands:" );
-	SERIAL_PRINT( "\r\n  create <fifo-name> <fifo-size> <fifo-item-size> <fifo-type>" );
+	SERIAL_PRINT( "\r\n  create <fifo-name> <fifo-size> <fifo-item-size> <fifo-max-flash-size> <fifo-type>" );
 	SERIAL_PRINT( "\r\n         - creates a first-in, first-out (FIFO) data queue called" );
-	SERIAL_PRINT( "\r\n           <fifo-name> and can store up to maximum of <fifo-size>" );
+	SERIAL_PRINT( "\r\n           <fifo-name> and can store up to maximum of either <fifo-size>" );
 	SERIAL_PRINT( "\r\n           items with each fifo item has size of <fifo-item-size>" );
-	SERIAL_PRINT( "\r\n           bytes" );
+	SERIAL_PRINT( "\r\n           bytes, or <fifo-max-flash-size>" );
 	SERIAL_PRINT( "\r\n  destroy <fifo-name>" );
 	SERIAL_PRINT( "\r\n         - destroys the first-in, first-out (FIFO) data queue as" );
 	SERIAL_PRINT( "\r\n           specified by the name <fifo-name>" );
@@ -415,6 +479,10 @@ int PSL_main( int argc, char * argv[] )
 	SERIAL_PRINT( "\r\n         - opens the first-in, first-out (FIFO) data queue called" );
 	SERIAL_PRINT( "\r\n           <fifo-name>, reads the current length of the FIFO, and" );
 	SERIAL_PRINT( "\r\n           closes the FIFO (the read length is printed to the console)" );
+	SERIAL_PRINT( "\r\n  size <fifo-name>" );
+	SERIAL_PRINT( "\r\n         - opens the first-in, first-out (FIFO) data queue called" );
+	SERIAL_PRINT( "\r\n           <fifo-name>, reads the current flash size of the FIFO, and" );
+	SERIAL_PRINT( "\r\n           closes the FIFO (the flash size is printed to the console)" );
 	SERIAL_PRINT( "\r\n" );
 	SERIAL_PRINT( "\r\nDataQ/>" );
 

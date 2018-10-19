@@ -21,10 +21,10 @@
 #include "../../inc/fsal.h"
 
 #include <stdio.h>
-#include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <unistd.h>
 #include <dirent.h>
 
 /** @brief Initializes the filesystem for use
@@ -194,11 +194,14 @@ int FSAL_ListDirectory( char * dir_name )
 	return FSAL_STATUS_OK;
 }
 
-/** @brief Lists a file.
+/** @brief Lists a file and retrieves its size.
  *
- *  This function lists a file in the current directory.
+ *  This function lists a file in the current directory and
+ *  retrieves the file size.
  *
  *  @param[in] file_name - the name of the file to list
+ *
+ *  @param[out] file_size - the current size of the file
  *
  *  @return int - the status or error code of the operation after
  *                the call:
@@ -207,9 +210,11 @@ int FSAL_ListDirectory( char * dir_name )
  *                FSAL_ERROR_FILE_ACCESS
  *
  */
-int FSAL_ListFile( char * file_name )
+int FSAL_ListFile( char * file_name, size_t * file_size )
 {
 	int fd;
+	struct stat st;
+	int status;
 
 	/* sanity checks */
 	if ( file_name == NULL ) {
@@ -222,8 +227,19 @@ int FSAL_ListFile( char * file_name )
 		return FSAL_ERROR_FILE_ACCESS;
 	}
 
+	/* retrieve the file status */
+	status = fstat( fd, &st );
+
 	/* close the file */
 	close( fd );
+
+	/* check for error condition */
+	if ( status == -1 ) {
+		return FSAL_ERROR_FILE_ACCESS;
+	}
+
+	/* copy the file size */
+	*file_size = st.st_size;
 
 	return FSAL_STATUS_OK;
 }
