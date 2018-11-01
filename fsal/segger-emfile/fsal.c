@@ -373,7 +373,7 @@ ssize_t FSAL_ReadFile( FSAL_File_t fsal_handle, uint8_t * buffer, size_t length 
 	if ( length ) {
 		actual_length = FS_FRead( buffer, 1, length, fd );
 		if ( (actual_length != length) &&
-			 (FS_FError(fd) != FS_ERR_OK) ) {
+			 (FS_FError(fd) != FS_ERR_OK) && (FS_FError(fd) != FS_ERR_EOF)){
 
 			FS_ClearErr( fd );
 			return -FSAL_ERROR_FILE_ACCESS;
